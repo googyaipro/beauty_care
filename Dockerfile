@@ -22,8 +22,8 @@ COPY agents/ agents/
 COPY gateways/ gateways/
 COPY admin_cms/ admin_cms/
 
-# Sync dependencies with uv
-RUN uv pip install --system -e .
+# Install dependencies in production mode
+RUN uv pip install --system .
 
 EXPOSE 8000 8014 8015 8016 8019 8021 8022
 

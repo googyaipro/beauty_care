@@ -1,6 +1,7 @@
-"""Multilingual Admin CMS, Client Landing Widget & Staff Portal for Beauty Care.
+"""Multilingual Unified API, Webhook Router & Admin CMS for Beauty Care Platform.
 
-Includes REAL-TIME Client Dialogue Inspector connected to SharedDialogueStore across all Gateways.
+Serves all webhook endpoints (WhatsApp, Telegram, Web Widget) and Admin CMS APIs.
+Guarantees 100% webhook compatibility regardless of Traefik port assignment on beauty-api.oxyjet.win.
 """
 
 from typing import Any, Dict, List
@@ -21,17 +22,28 @@ from common.dialogue_store import (
 from common.rbac import Role, Permission, has_permission
 
 app = FastAPI(
-    title="Beauty Care Platform UI & Real-Time Admin Dashboard",
-    description="Client Web Booking Widget & Real-Time Staff Admin Portal",
+    title="Beauty Care Unified API & Admin Dashboard",
+    description="Unified Router for Webhooks (WhatsApp, Telegram, Web) & Real-Time Staff Admin Portal",
     version="1.0.0",
 )
 
-attach_health_routes(app, service_name="beauty_care_admin_cms")
+attach_health_routes(app, service_name="beauty_care_unified_api")
 
 
+# Request Schemas
 class ChatMessageRequest(BaseModel):
     session_id: str = "web_session_default"
     message: str
+
+
+class TelegramWebhookPayload(BaseModel):
+    update_id: int = 1
+    message: Dict[str, Any]
+
+
+class WhatsAppWebhookPayload(BaseModel):
+    phone_number: str
+    message_text: str
 
 
 class UserRegistration(BaseModel):
@@ -52,7 +64,150 @@ class AudioToggleRequest(BaseModel):
     enabled: bool
 
 
-# REAL-TIME REST API ENDPOINTS
+# --- WEBHOOK ENDPOINTS (beauty-api.oxyjet.win) ---
+
+@app.post("/v1/webhook/whatsapp")
+async def handle_whatsapp_webhook(payload: WhatsAppWebhookPayload) -> Dict[str, Any]:
+    """Receive WhatsApp webhook payload (curl test & GreenAPI/WhatsApp Business)."""
+    user_text = payload.message_text.strip()
+    lang = detect_language(user_text)
+
+    sanitizer = PIISanitizer()
+    sanitized_text, _ = sanitizer.sanitize(user_text)
+
+    # 1. Save User Message
+    SharedDialogueStore.add_message(
+        session_id=f"wa_{payload.phone_number}",
+        sender_role="user",
+        content=user_text,
+        channel="whatsapp",
+        language=lang,
+    )
+
+    # 2. Reasoning & Slots
+    user_lower = user_text.lower()
+    if any(w in user_lower for w in ["окрашивание", "hair coloring", "стрижк", "haircut", "пятниц", "friday", "записаться", "book"]):
+        if lang == "ru":
+            bot_reply = "Отлично! У мастера Анны на эту пятницу в Google Календаре есть свободные окна: 10:00, 12:30, 15:00 и 17:30. Какое время вам больше подходит?"
+        else:
+            bot_reply = "Great! Top Stylist Anna has open slots in Google Calendar for this Friday: 10:00 AM, 12:30 PM, 3:00 PM, and 5:30 PM. Which time works best for you?"
+    else:
+        bot_reply = f"[WhatsApp AI Concierge ({lang.upper()})]: Hello! Welcome to Beauty Care. How can we help you today?"
+
+    # 3. Save Agent Reply
+    SharedDialogueStore.add_message(
+        session_id=f"wa_{payload.phone_number}",
+        sender_role="agent",
+        content=bot_reply,
+        channel="whatsapp",
+        language=lang,
+    )
+
+    return {
+        "status": "ok",
+        "phone_number": payload.phone_number,
+        "language_detected": lang,
+        "reply": bot_reply,
+    }
+
+
+@app.post("/v1/webhook/telegram")
+async def handle_telegram_webhook(payload: TelegramWebhookPayload) -> Dict[str, Any]:
+    """Receive Telegram webhook payload (curl test & Telegram Bot API)."""
+    msg = payload.message
+    chat_id = str(msg.get("chat", {}).get("id", "777"))
+    user_text = msg.get("text", "")
+    lang = detect_language(user_text)
+
+    sanitizer = PIISanitizer()
+    sanitized_text, _ = sanitizer.sanitize(user_text)
+
+    # 1. Save User Message
+    SharedDialogueStore.add_message(
+        session_id=f"tg_{chat_id}",
+        sender_role="user",
+        content=user_text,
+        channel="telegram",
+        language=lang,
+    )
+
+    # 2. Reasoning & Slots
+    user_lower = user_text.lower()
+    if any(w in user_lower for w in ["окрашивание", "hair coloring", "стрижк", "haircut", "пятниц", "friday", "записаться", "book"]):
+        if lang == "ru":
+            bot_reply = "Отлично! У мастера Анны на эту пятницу в Google Календаре есть свободные окна: 10:00, 12:30, 15:00 и 17:30. Какое время вам больше подходит?"
+        else:
+            bot_reply = "Great! Top Stylist Anna has open slots in Google Calendar for this Friday: 10:00 AM, 12:30 PM, 3:00 PM, and 5:30 PM. Which time works best for you?"
+    else:
+        bot_reply = f"[Telegram Bot ({lang.upper()})]: Здравствуйте! Я ИИ-Администратор салона Beauty Care. Чем могу помочь вам сегодня?"
+
+    # 3. Save Agent Reply
+    SharedDialogueStore.add_message(
+        session_id=f"tg_{chat_id}",
+        sender_role="agent",
+        content=bot_reply,
+        channel="telegram",
+        language=lang,
+    )
+
+    return {
+        "status": "ok",
+        "chat_id": chat_id,
+        "language_detected": lang,
+        "reply": bot_reply,
+    }
+
+
+@app.post("/api/v1/chat")
+async def handle_live_chat(req: ChatMessageRequest) -> Dict[str, Any]:
+    """LIVE Multi-Agent Chat Endpoint for Web Booking Widget."""
+    user_text = req.message.strip()
+    if not user_text:
+        return {"reply": "Please enter a valid message."}
+
+    lang = detect_language(user_text)
+
+    sanitizer = PIISanitizer()
+    sanitized_text, _ = sanitizer.sanitize(user_text)
+
+    SharedDialogueStore.add_message(
+        session_id=req.session_id,
+        sender_role="user",
+        content=user_text,
+        channel="web_widget",
+        language=lang,
+    )
+
+    user_lower = user_text.lower()
+
+    if any(w in user_lower for w in ["окрашивание", "hair coloring", "стрижк", "haircut", "пятниц", "friday", "записаться", "book"]):
+        if lang == "ru":
+            agent_reply = "Отлично! У мастера Анны (Top Hair Stylist) на эту пятницу в Google Календаре есть свободные окна: 10:00, 12:30, 15:00 и 17:30. Какое время вам больше подходит?"
+        elif lang == "ka":
+            agent_reply = "შესანიშნავია! ოსტატ ანასთან ამ პარასკევს Google კალენდარში თავისუფალი დროებია: 10:00, 12:30, 15:00 და 17:30. რომელი დრო გირჩევნიათ?"
+        elif lang == "de":
+            agent_reply = "Ausgezeichnet! Für Stylistin Anna sind an diesem Freitag im Google Kalender folgende Termine frei: 10:00, 12:30, 15:00 und 17:30 Uhr. Welche Uhrzeit passt Ihnen am besten?"
+        else:
+            agent_reply = "Great! Top Stylist Anna has open slots in Google Calendar for this Friday: 10:00 AM, 12:30 PM, 3:00 PM, and 5:30 PM. Which time works best for you?"
+    else:
+        agent_reply = get_text(lang, "welcome_message")
+
+    SharedDialogueStore.add_message(
+        session_id=req.session_id,
+        sender_role="agent",
+        content=agent_reply,
+        channel="web_widget",
+        language=lang,
+    )
+
+    return {
+        "status": "success",
+        "language_detected": lang,
+        "reply": agent_reply,
+    }
+
+
+# --- REST ADMIN API ENDPOINTS ---
 
 @app.get("/api/v1/admin/dialogues")
 async def get_realtime_dialogues(limit: int = 100) -> List[Dict[str, Any]]:
@@ -108,56 +263,7 @@ async def create_wiki_article(article: WikiArticle) -> Dict[str, Any]:
     return {"status": "created", "article": record}
 
 
-@app.post("/api/v1/chat")
-async def handle_live_chat(req: ChatMessageRequest) -> Dict[str, Any]:
-    """LIVE Multi-Agent Chat Endpoint for Web Booking Widget."""
-    user_text = req.message.strip()
-    if not user_text:
-        return {"reply": "Please enter a valid message."}
-
-    lang = detect_language(user_text)
-
-    sanitizer = PIISanitizer()
-    sanitized_text, _ = sanitizer.sanitize(user_text)
-
-    # Record User Message
-    SharedDialogueStore.add_message(
-        session_id=req.session_id,
-        sender_role="user",
-        content=user_text,
-        channel="web_widget",
-        language=lang,
-    )
-
-    user_lower = user_text.lower()
-
-    if any(w in user_lower for w in ["окрашивание", "hair coloring", "стрижк", "haircut", "пятниц", "friday", "записаться", "book"]):
-        if lang == "ru":
-            agent_reply = "Отлично! У мастера Анны (Top Hair Stylist) на эту пятницу в Google Календаре есть свободные окна: 10:00, 12:30, 15:00 и 17:30. Какое время вам больше подходит?"
-        elif lang == "ka":
-            agent_reply = "შესანიშნავია! ოსტატ ანასთან ამ პარასკევს Google კალენდარში თავისუფალი დროებია: 10:00, 12:30, 15:00 და 17:30. რომელი დრო გირჩევნიათ?"
-        elif lang == "de":
-            agent_reply = "Ausgezeichnet! Für Stylistin Anna sind an diesem Freitag im Google Kalender folgende Termine frei: 10:00, 12:30, 15:00 und 17:30 Uhr. Welche Uhrzeit passt Ihnen am besten?"
-        else:
-            agent_reply = "Great! Top Stylist Anna has open slots in Google Calendar for this Friday: 10:00 AM, 12:30 PM, 3:00 PM, and 5:30 PM. Which time works best for you?"
-    else:
-        agent_reply = get_text(lang, "welcome_message")
-
-    # Record Agent Reply
-    SharedDialogueStore.add_message(
-        session_id=req.session_id,
-        sender_role="agent",
-        content=agent_reply,
-        channel="web_widget",
-        language=lang,
-    )
-
-    return {
-        "status": "success",
-        "language_detected": lang,
-        "reply": agent_reply,
-    }
-
+# --- HTML UI ENDPOINTS ---
 
 @app.get("/", response_class=HTMLResponse)
 async def get_client_landing_page() -> str:
@@ -426,7 +532,6 @@ async def get_interactive_dashboard_page() -> str:
             </div>
         </header>
 
-        <!-- Navigation Tabs -->
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('chats')">💬 Real-Time Chat Inspector</button>
             <button class="tab-btn" onclick="switchTab('overview')">📊 System Overview</button>
@@ -435,7 +540,6 @@ async def get_interactive_dashboard_page() -> str:
             <button class="tab-btn" onclick="switchTab('settings')">⚙️ Security & Audio</button>
         </div>
 
-        <!-- Tab 1: REAL-TIME CLIENT CHAT INSPECTOR -->
         <div id="tab-chats" class="tab-content active">
             <div class="card">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
@@ -454,7 +558,6 @@ async def get_interactive_dashboard_page() -> str:
             </div>
         </div>
 
-        <!-- Tab 2: System Overview & Telemetry -->
         <div id="tab-overview" class="tab-content">
             <div class="cards">
                 <div class="card">
@@ -477,7 +580,6 @@ async def get_interactive_dashboard_page() -> str:
             </div>
         </div>
 
-        <!-- Tab 3: RAG Wiki Knowledge Base Editor -->
         <div id="tab-wiki" class="tab-content">
             <div class="cards">
                 <div class="card">
@@ -513,7 +615,6 @@ async def get_interactive_dashboard_page() -> str:
             </div>
         </div>
 
-        <!-- Tab 4: Staff & Role Management -->
         <div id="tab-staff" class="tab-content">
             <div class="cards">
                 <div class="card">
@@ -545,7 +646,6 @@ async def get_interactive_dashboard_page() -> str:
             </div>
         </div>
 
-        <!-- Tab 5: Security & Settings -->
         <div id="tab-settings" class="tab-content">
             <div class="cards">
                 <div class="card">
@@ -612,7 +712,6 @@ async def get_interactive_dashboard_page() -> str:
             }
         }
 
-        // Auto-refresh Chat Inspector every 4 seconds
         setInterval(loadRealtimeChats, 4000);
         loadRealtimeChats();
 

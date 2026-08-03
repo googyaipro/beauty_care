@@ -1,7 +1,7 @@
 """Shared GCP Service Account & Auth Helper for Beauty Care Platform.
 
-Loads service-account-key.json via Google Application Default Credentials (ADC)
-and manages OIDC OAuth2 Bearer Tokens for Vertex AI, Google Calendar API, and Google Maps API.
+Loads service-account-key.json via Google Application Default Credentials (ADC),
+file path, OR direct JSON environment variable SERVICE_ACCOUNT_KEY_JSON.
 """
 
 import json
@@ -18,7 +18,22 @@ LOCAL_KEY_PATH = Path(__file__).resolve().parent.parent / "service-account-key.j
 
 
 def get_service_account_credentials():
-    """Load Google Service Account credentials from JSON key file or environment."""
+    """Load Google Service Account credentials from JSON env string, JSON file, or ADC."""
+    scopes = [
+        "https://www.googleapis.com/auth/cloud-platform",
+        "https://www.googleapis.com/auth/calendar",
+    ]
+
+    # Option 1: Direct JSON string in Environment Variable (e.g. pasted in Dokploy UI)
+    json_env = os.environ.get("SERVICE_ACCOUNT_KEY_JSON")
+    if json_env and json_env.strip().startswith("{"):
+        try:
+            info = json.loads(json_env)
+            return service_account.Credentials.from_service_account_info(info, scopes=scopes)
+        except Exception as exc:
+            print(f"Error parsing SERVICE_ACCOUNT_KEY_JSON: {exc}")
+
+    # Option 2: File path on disk
     key_file = None
     if KEY_PATH.exists():
         key_file = str(KEY_PATH)
@@ -28,13 +43,12 @@ def get_service_account_credentials():
         key_file = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
 
     if key_file and os.path.exists(key_file):
-        scopes = [
-            "https://www.googleapis.com/auth/cloud-platform",
-            "https://www.googleapis.com/auth/calendar",
-        ]
-        return service_account.Credentials.from_service_account_file(key_file, scopes=scopes)
-    
-    # Fallback to standard ADC
+        try:
+            return service_account.Credentials.from_service_account_file(key_file, scopes=scopes)
+        except Exception as exc:
+            print(f"Error loading key file {key_file}: {exc}")
+
+    # Option 3: Standard GCP ADC Fallback
     credentials, _ = google.auth.default()
     return credentials
 

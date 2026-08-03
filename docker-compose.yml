@@ -9,6 +9,8 @@ services:
       - "8000:8000"
     environment:
       - PRODUCTION_DOMAIN=beauty-registry.oxyjet.win
+    volumes:
+      - shared_data:/app/data
     restart: always
 
   google_calendar_crm_mcp:
@@ -17,6 +19,8 @@ services:
     command: python3 mcp_servers/google_calendar_crm_mcp/server.py
     ports:
       - "8015:8015"
+    volumes:
+      - shared_data:/app/data
     restart: always
 
   payment_mcp:
@@ -25,6 +29,8 @@ services:
     command: python3 mcp_servers/payment_mcp/server.py
     ports:
       - "8016:8016"
+    volumes:
+      - shared_data:/app/data
     restart: always
 
   maps_mcp:
@@ -33,6 +39,8 @@ services:
     command: python3 mcp_servers/maps_mcp/server.py
     ports:
       - "8014:8014"
+    volumes:
+      - shared_data:/app/data
     restart: always
 
   admin_cms:
@@ -43,6 +51,8 @@ services:
       - "8019:8019"
     environment:
       - PRODUCTION_DOMAIN=beauty-admin.oxyjet.win
+    volumes:
+      - shared_data:/app/data
     restart: always
 
   telegram_gateway:
@@ -53,6 +63,8 @@ services:
       - "8021:8021"
     environment:
       - BASE_API_URL=https://beauty-api.oxyjet.win
+    volumes:
+      - shared_data:/app/data
     restart: always
 
   whatsapp_gateway:
@@ -63,4 +75,9 @@ services:
       - "8022:8022"
     environment:
       - BASE_API_URL=https://beauty-api.oxyjet.win
+    volumes:
+      - shared_data:/app/data
     restart: always
+
+volumes:
+  shared_data:

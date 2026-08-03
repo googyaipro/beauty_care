@@ -1,7 +1,7 @@
-"""Multilingual Admin CMS & RAG Dashboard for Beauty Care Platform.
+"""Multilingual Admin CMS, Client Landing Widget & Staff Portal for Beauty Care.
 
-Serves admin.oxyjet.win interface for managing RAG knowledge base, service catalog,
-RBAC user roles, audio recording toggle, and chat inspection.
+Separates Client Landing / Web Booking Widget (beauty.oxyjet.win)
+from Protected Staff & Master Admin Portal (beauty-admin.oxyjet.win).
 """
 
 from typing import Any, Dict, List
@@ -11,10 +11,11 @@ from pydantic import BaseModel
 import uvicorn
 
 from common.health_checker import attach_health_routes
+from common.rbac import Role, Permission, has_permission
 
 app = FastAPI(
-    title="Beauty Care Admin CMS",
-    description="Multilingual Admin Dashboard for Salon Managers & IT Super Admins",
+    title="Beauty Care Platform UI",
+    description="Client Web Booking Widget & Protected Staff Admin Portal",
     version="1.0.0",
 )
 
@@ -27,6 +28,13 @@ _system_settings = {
     "supported_languages": ["en", "ru", "ka", "de", "it", "es", "fr"],
     "payment_provider": "stripe",
 }
+
+# User accounts database
+_staff_users = [
+    {"email": "admin@oxyjet.win", "name": "Super Admin", "role": "super_admin"},
+    {"email": "manager@oxyjet.win", "name": "Elena Manager", "role": "salon_manager"},
+    {"email": "anna@oxyjet.win", "name": "Anna Stylist", "role": "master"},
+]
 
 _wiki_articles: List[Dict[str, Any]] = [
     {
@@ -46,6 +54,13 @@ _wiki_articles: List[Dict[str, Any]] = [
 ]
 
 
+class UserRegistration(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str = "receptionist"
+
+
 class WikiArticle(BaseModel):
     title: str
     category: str
@@ -58,14 +73,14 @@ class AudioToggleRequest(BaseModel):
 
 
 @app.get("/", response_class=HTMLResponse)
-async def get_dashboard_ui() -> str:
-    """Render rich, modern Glassmorphism Admin Dashboard & Landing Page."""
+async def get_client_landing_page() -> str:
+    """Public Client Landing Page & Interactive AI Web Booking Widget (beauty.oxyjet.win)."""
     return """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌸 Beauty Care — Multi-Agent AI Platform</title>
+    <title>🌸 Beauty Care — Salon & Spa Online Booking</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -90,10 +105,7 @@ async def get_dashboard_ui() -> str:
             justify-content: center;
         }
 
-        .container {
-            max-width: 1200px;
-            width: 100%;
-        }
+        .container { max-width: 1200px; width: 100%; }
 
         header {
             display: flex;
@@ -104,160 +116,133 @@ async def get_dashboard_ui() -> str:
             margin-bottom: 2rem;
         }
 
-        .logo-title {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
         .logo-title h1 {
-            font-size: 2rem;
+            font-size: 2.2rem;
             font-weight: 700;
             background: linear-gradient(90deg, var(--accent-pink), var(--accent-purple));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        .badge-live {
-            background: rgba(16, 185, 129, 0.2);
-            color: #10b981;
-            border: 1px solid rgba(16, 185, 129, 0.4);
-            padding: 0.35rem 0.8rem;
-            border-radius: 999px;
-            font-size: 0.85rem;
-            font-weight: 600;
+        .nav-buttons {
             display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            gap: 1rem;
         }
 
-        .pulse-dot {
-            width: 8px;
-            height: 8px;
-            background: #10b981;
-            border-radius: 50%;
-            box-shadow: 0 0 8px #10b981;
+        .btn {
+            padding: 0.6rem 1.2rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s ease;
         }
 
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 1.5rem;
+        .btn-primary {
+            background: linear-gradient(90deg, var(--accent-pink), var(--accent-purple));
+            color: white;
+            border: none;
         }
 
-        .card {
+        .btn-outline {
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid var(--card-border);
+        }
+
+        .btn-outline:hover { border-color: var(--accent-pink); }
+
+        .hero-section {
+            text-align: center;
+            padding: 3rem 1rem;
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             backdrop-filter: blur(12px);
-            border-radius: 1rem;
-            padding: 1.5rem;
-            transition: transform 0.2s ease, border-color 0.2s ease;
+            border-radius: 1.5rem;
+            margin-bottom: 2rem;
         }
 
-        .card:hover {
-            transform: translateY(-4px);
-            border-color: rgba(236, 72, 153, 0.4);
-        }
-
-        .card h2 {
-            font-size: 1.25rem;
+        .hero-section h2 {
+            font-size: 2.5rem;
             margin-bottom: 1rem;
+        }
+
+        .hero-section p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            max-width: 600px;
+            margin: 0 auto 2rem auto;
+        }
+
+        /* Interactive AI Web Chat Widget */
+        .chat-widget {
+            max-width: 500px;
+            margin: 0 auto;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--card-border);
+            border-radius: 1rem;
+            overflow: hidden;
+            text-align: left;
+        }
+
+        .chat-header {
+            background: rgba(255,255,255,0.05);
+            padding: 1rem;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
+            border-bottom: 1px solid var(--card-border);
         }
 
-        .subdomains-list {
-            list-style: none;
+        .chat-messages {
+            height: 250px;
+            padding: 1rem;
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 0.75rem;
         }
 
-        .subdomain-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(0, 0, 0, 0.2);
+        .msg {
             padding: 0.75rem 1rem;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
             font-size: 0.9rem;
+            max-width: 80%;
         }
 
-        .subdomain-item a {
-            color: var(--accent-cyan);
-            text-decoration: none;
-            font-weight: 600;
-        }
-
-        .subdomain-item a:hover { text-decoration: underline; }
-
-        .toggle-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--card-border);
-        }
-
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 50px;
-            height: 26px;
-        }
-
-        .switch input { opacity: 0; width: 0; height: 0; }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(255,255,255,0.2);
-            transition: .4s;
-            border-radius: 34px;
-        }
-
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-
-        input:checked + .slider { background-color: var(--accent-pink); }
-        input:checked + .slider:before { transform: translateX(24px); }
-
-        .agent-pills {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-        }
-
-        .pill {
-            background: rgba(168, 85, 247, 0.15);
-            color: var(--accent-purple);
+        .msg-agent {
+            background: rgba(168, 85, 247, 0.2);
             border: 1px solid rgba(168, 85, 247, 0.3);
-            padding: 0.25rem 0.65rem;
-            border-radius: 999px;
-            font-size: 0.8rem;
-            font-weight: 600;
+            align-self: flex-start;
+        }
+
+        .msg-user {
+            background: var(--accent-pink);
+            color: white;
+            align-self: flex-end;
+        }
+
+        .chat-input-bar {
+            display: flex;
+            padding: 0.75rem;
+            background: rgba(0,0,0,0.6);
+            gap: 0.5rem;
+        }
+
+        .chat-input-bar input {
+            flex: 1;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid var(--card-border);
+            padding: 0.6rem 1rem;
+            border-radius: 0.5rem;
+            color: white;
         }
 
         footer {
-            margin-top: 3rem;
             text-align: center;
+            margin-top: 3rem;
             font-size: 0.85rem;
             color: var(--text-muted);
-            border-top: 1px solid var(--card-border);
-            padding-top: 1.5rem;
         }
     </style>
 </head>
@@ -265,95 +250,217 @@ async def get_dashboard_ui() -> str:
     <div class="container">
         <header>
             <div class="logo-title">
-                <h1>🌸 Beauty Care AI Platform</h1>
+                <h1>🌸 Beauty Care</h1>
             </div>
-            <div class="badge-live">
-                <div class="pulse-dot"></div>
-                LIVE on beauty.oxyjet.win
+            <div class="nav-buttons">
+                <a href="/login" class="btn btn-outline">Staff Portal Login 🔑</a>
+                <a href="/register" class="btn btn-primary">Staff Registration 📝</a>
             </div>
         </header>
 
-        <div class="grid">
-            <!-- Card 1: Subdomains Architecture -->
-            <div class="card">
-                <h2>🌐 Production Infrastructure</h2>
-                <ul class="subdomains-list">
-                    <li class="subdomain-item">
-                        <span>Main Salon Site</span>
-                        <a href="https://beauty.oxyjet.win" target="_blank">beauty.oxyjet.win ↗</a>
-                    </li>
-                    <li class="subdomain-item">
-                        <span>Webhooks & API</span>
-                        <a href="https://beauty-api.oxyjet.win/healthz" target="_blank">beauty-api.oxyjet.win ↗</a>
-                    </li>
-                    <li class="subdomain-item">
-                        <span>Agent Registry</span>
-                        <a href="https://beauty-registry.oxyjet.win/healthz" target="_blank">beauty-registry.oxyjet.win ↗</a>
-                    </li>
-                    <li class="subdomain-item">
-                        <span>Admin RAG CMS</span>
-                        <a href="https://beauty-admin.oxyjet.win/docs" target="_blank">beauty-admin.oxyjet.win ↗</a>
-                    </li>
-                </ul>
-            </div>
+        <div class="hero-section">
+            <h2>Book Your Salon Appointment in Seconds</h2>
+            <p>Chat with our AI Receptionist in WhatsApp, Telegram, or right here to schedule haircutting, cosmetology, and nail styling.</p>
 
-            <!-- Card 2: Micro-Agents Fleet -->
-            <div class="card">
-                <h2>🤖 Micro-Agents Fleet</h2>
-                <p style="color: var(--text-muted); font-size: 0.9rem;">Decentralized A2A specialists with dedicated prompts and tools:</p>
-                <div class="agent-pills">
-                    <span class="pill">Concierge Receptionist</span>
-                    <span class="pill">HairCare Specialist</span>
-                    <span class="pill">Cosmetology Specialist</span>
-                    <span class="pill">NailStyle Specialist</span>
-                    <span class="pill">Google Maps Navigation</span>
-                    <span class="pill">Marketing & LTV Retention</span>
-                    <span class="pill">Reputation 5★ Booster</span>
-                    <span class="pill">Google Calendar CRM</span>
+            <div class="chat-widget">
+                <div class="chat-header">
+                    <div style="width:10px; height:10px; background:#10b981; border-radius:50%;"></div>
+                    <strong>AI Concierge Receptionist</strong>
                 </div>
-            </div>
-
-            <!-- Card 3: Security & Audio Settings -->
-            <div class="card">
-                <h2>🔒 Security & Privacy (152-ФЗ)</h2>
-                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">PII Sanitizer & De-anonymization Gateway active.</p>
-                
-                <div class="toggle-container">
-                    <div>
-                        <div style="font-weight: 600; font-size: 0.95rem;">Save Audio Recordings</div>
-                        <div style="font-size: 0.75rem; color: var(--text-muted);">Default OFF for privacy</div>
+                <div class="chat-messages" id="chatMessages">
+                    <div class="msg msg-agent">
+                        Hello! Welcome to Beauty Care. How can I assist you with your haircut, skincare, or manicure appointment today?
                     </div>
-                    <label class="switch">
-                        <input type="checkbox" id="audioToggle" onchange="toggleAudio(this.checked)">
-                        <span class="slider"></span>
-                    </label>
+                </div>
+                <div class="chat-input-bar">
+                    <input type="text" id="chatInput" placeholder="Type your request in any language..." onkeydown="if(event.key==='Enter') sendMsg()">
+                    <button class="btn btn-primary" onclick="sendMsg()">Send</button>
                 </div>
             </div>
         </div>
 
         <footer>
-            Beauty Care Multi-Agent Platform &copy; 2026 | GCP Project: <code>beauty-care-platform</code> | Cloudflare Universal SSL 🟧
+            Beauty Care Platform &copy; 2026 | Domain: <code>beauty.oxyjet.win</code> | GCP: <code>beauty-care-platform</code>
         </footer>
     </div>
 
     <script>
-        async function toggleAudio(enabled) {
-            try {
-                const res = await fetch('/api/v1/admin/settings/audio_toggle', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled })
-                });
-                const data = await res.json();
-                console.log('Audio toggle response:', data);
-            } catch (err) {
-                console.error('Failed to toggle audio:', err);
-            }
+        function sendMsg() {
+            const input = document.getElementById('chatInput');
+            const txt = input.value.trim();
+            if (!txt) return;
+
+            const box = document.getElementById('chatMessages');
+            box.innerHTML += `<div class="msg msg-user">${txt}</div>`;
+            input.value = '';
+
+            setTimeout(() => {
+                box.innerHTML += `<div class="msg msg-agent">[AI Receptionist]: Thank you for your message! I am checking available slots in Google Calendar...</div>`;
+                box.scrollTop = box.scrollHeight;
+            }, 600);
         }
     </script>
 </body>
 </html>
 """
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def get_login_page() -> str:
+    """Staff & Master Portal Login Screen."""
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>🔑 Staff Portal Login — Beauty Care</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { background: #0f172a; color: white; font-family: 'Outfit', sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; margin:0; }
+        .box { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 2.5rem; border-radius: 1rem; width: 380px; }
+        h2 { margin-bottom: 1.5rem; color: #ec4899; text-align:center; }
+        input, select, button { width: 100%; padding: 0.75rem; margin-bottom: 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.4); color: white; }
+        button { background: #ec4899; font-weight: bold; cursor: pointer; border: none; }
+        a { color: #06b6d4; text-decoration: none; display: block; text-align: center; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>🔑 Staff Portal Login</h2>
+        <input type="email" placeholder="Staff Email (e.g. manager@oxyjet.win)">
+        <input type="password" placeholder="Password">
+        <button onclick="location.href='/dashboard'">Sign In</button>
+        <a href="/register">Don't have an account? Register staff member ➔</a>
+    </div>
+</body>
+</html>
+"""
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def get_register_page() -> str:
+    """Staff & Master Registration Screen."""
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>📝 Staff Registration — Beauty Care</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { background: #0f172a; color: white; font-family: 'Outfit', sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; margin:0; }
+        .box { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 2.5rem; border-radius: 1rem; width: 420px; }
+        h2 { margin-bottom: 1.5rem; color: #a855f7; text-align:center; }
+        input, select, button { width: 100%; padding: 0.75rem; margin-bottom: 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.4); color: white; }
+        button { background: #a855f7; font-weight: bold; cursor: pointer; border: none; }
+        a { color: #06b6d4; text-decoration: none; display: block; text-align: center; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>📝 Register New Staff Member</h2>
+        <input type="text" id="regName" placeholder="Full Name (e.g. Elena Petrova)">
+        <input type="email" id="regEmail" placeholder="Email Address">
+        <input type="password" placeholder="Password">
+        <select id="regRole">
+            <option value="salon_manager">Salon Manager (Управляющий)</option>
+            <option value="receptionist">Receptionist (Администратор)</option>
+            <option value="master">Master / Stylist (Мастер салона)</option>
+            <option value="super_admin">Super Admin (IT-Администратор)</option>
+        </select>
+        <button onclick="registerUser()">Create Account</button>
+        <a href="/login">Already registered? Sign in ➔</a>
+    </div>
+
+    <script>
+        async function registerUser() {
+            const name = document.getElementById('regName').value;
+            const email = document.getElementById('regEmail').value;
+            const role = document.getElementById('regRole').value;
+            if(!name || !email) { alert('Please enter name and email'); return; }
+
+            const res = await fetch('/api/v1/admin/users/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, password: 'secret_pass', role })
+            });
+            const data = await res.json();
+            alert('Staff user registered successfully: ' + data.name + ' (' + data.role + ')');
+            location.href = '/dashboard';
+        }
+    </script>
+</body>
+</html>
+"""
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def get_dashboard_page() -> str:
+    """Protected Staff & Master Management Dashboard (beauty-admin.oxyjet.win)."""
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>🌸 Admin & Master Dashboard — Beauty Care</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { background: #0f172a; color: white; font-family: 'Outfit', sans-serif; padding: 2rem; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 2rem; }
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 1rem; }
+        h2 { color: #ec4899; margin-bottom: 1rem; }
+        ul { list-style: none; padding: 0; }
+        li { padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌸 Beauty Care Admin & Master Portal</h1>
+            <a href="/" style="color:#06b6d4; text-decoration:none;">View Client Website ↗</a>
+        </header>
+
+        <div class="cards">
+            <div class="card">
+                <h2>👥 Registered Staff Members</h2>
+                <ul id="usersList">
+                    <li>👑 <strong>admin@oxyjet.win</strong> (Super Admin)</li>
+                    <li>🏬 <strong>manager@oxyjet.win</strong> (Salon Manager)</li>
+                    <li>💇‍♀️ <strong>anna@oxyjet.win</strong> (Top Stylist)</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h2>📚 RAG Wiki Knowledge Base</h2>
+                <ul>
+                    <li>✂️ Hair Coloring Pre-Care Advice</li>
+                    <li>✨ Уход после чистки лица</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h2>🔒 Security & Audio Retention</h2>
+                <p>PII Sanitizer: <strong>ACTIVE</strong></p>
+                <p>Audio Retention: <strong>OFF</strong> (Privacy Mode)</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+
+@app.post("/api/v1/admin/users/register", status_code=status.HTTP_201_CREATED)
+async def register_staff_user(user: UserRegistration) -> Dict[str, Any]:
+    """Register a new staff member (Manager, Receptionist, Master, Admin)."""
+    record = user.model_dump()
+    _staff_users.append(record)
+    return {"status": "registered", "name": user.name, "email": user.email, "role": user.role}
+
+
+@app.get("/api/v1/admin/users")
+async def list_staff_users() -> List[Dict[str, Any]]:
+    """List all registered staff members."""
+    return _staff_users
 
 
 @app.get("/api/v1/admin/settings")
@@ -371,21 +478,6 @@ async def toggle_audio_recording(req: AudioToggleRequest) -> Dict[str, Any]:
         "save_audio_recordings": _system_settings["save_audio_recordings"],
         "message": f"Audio file retention is now {'ENABLED' if req.enabled else 'DISABLED'}",
     }
-
-
-@app.get("/api/v1/admin/wiki")
-async def list_wiki_articles() -> List[Dict[str, Any]]:
-    """List all RAG Wiki articles."""
-    return _wiki_articles
-
-
-@app.post("/api/v1/admin/wiki", status_code=status.HTTP_201_CREATED)
-async def create_wiki_article(article: WikiArticle) -> Dict[str, Any]:
-    """Create a new RAG Wiki article."""
-    art_id = f"wiki_{len(_wiki_articles) + 1}"
-    record = {"id": art_id, **article.model_dump()}
-    _wiki_articles.append(record)
-    return {"status": "created", "article": record}
 
 
 if __name__ == "__main__":

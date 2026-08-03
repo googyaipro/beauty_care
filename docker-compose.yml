@@ -12,7 +12,7 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
-      - shared_data:/app/data
+      - ./data:/app/data
     restart: always
 
   google_calendar_crm_mcp:
@@ -25,7 +25,7 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
-      - shared_data:/app/data
+      - ./data:/app/data
     restart: always
 
   payment_mcp:
@@ -35,7 +35,7 @@ services:
     ports:
       - "8016:8016"
     volumes:
-      - shared_data:/app/data
+      - ./data:/app/data
     restart: always
 
   maps_mcp:
@@ -48,7 +48,7 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
-      - shared_data:/app/data
+      - ./data:/app/data
     restart: always
 
   admin_cms:
@@ -62,7 +62,7 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
-      - shared_data:/app/data
+      - ./data:/app/data
     restart: always
 
   telegram_gateway:
@@ -76,7 +76,7 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
-      - shared_data:/app/data
+      - ./data:/app/data
     restart: always
 
   whatsapp_gateway:
@@ -90,8 +90,5 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
-      - shared_data:/app/data
+      - ./data:/app/data
     restart: always
-
-volumes:
-  shared_data:

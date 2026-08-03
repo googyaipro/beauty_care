@@ -1,0 +1,14 @@
+{
+  "language": "Русский",
+  "welcome_message": "Добро пожаловать в салон красоты! Чем я могу помочь вам сегодня?",
+  "appointment_confirmed": "Ваша запись успешно подтверждена!",
+  "appointment_details": "Дата: {date} в {time}\nУслуга: {service}\nМастер: {master}\nАдрес: {address}",
+  "reminder_24h": "Напоминаем: завтра у вас запись на {time} ({service}). Пожалуйста, подтвердите визит.",
+  "reminder_2h": "Ваша запись через 2 часа ({time}). Время в пути: ~{travel_time}. Маршрут на карте: {route_link}",
+  "confirm_button": "Подтверждаю",
+  "reschedule_button": "Перенести",
+  "cancel_button": "Отменить",
+  "prepayment_request": "Для фиксации бронирования внесите предоплату {amount} {currency} по ссылке: {payment_link}",
+  "feedback_request": "Спасибо за визит! Оцените ваш визит от 1 до 5 звезд.",
+  "google_review_invite": "Рады, что вам всё понравилось! Будем очень благодарны за отзыв на карте: {review_link}"
+}

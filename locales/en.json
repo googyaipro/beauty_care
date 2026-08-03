@@ -1,0 +1,14 @@
+{
+  "language": "English",
+  "welcome_message": "Welcome to Beauty Care! How can I assist you with your appointment today?",
+  "appointment_confirmed": "Your appointment has been successfully confirmed!",
+  "appointment_details": "Date: {date} at {time}\nService: {service}\nMaster: {master}\nAddress: {address}",
+  "reminder_24h": "Friendly reminder: You have an appointment tomorrow at {time} for {service}. Please confirm your visit.",
+  "reminder_2h": "Your appointment is in 2 hours ({time}). Travel time from your location: ~{travel_time}. Route link: {route_link}",
+  "confirm_button": "Confirm",
+  "reschedule_button": "Reschedule",
+  "cancel_button": "Cancel",
+  "prepayment_request": "To confirm your booking, please pay the deposit of {amount} {currency} via this secure link: {payment_link}",
+  "feedback_request": "Thank you for visiting us! How would you rate your experience today from 1 to 5 stars?",
+  "google_review_invite": "We are thrilled you enjoyed your visit! We would deeply appreciate it if you could leave us a review on Google Maps: {review_link}"
+}

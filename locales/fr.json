@@ -1,0 +1,14 @@
+{
+  "language": "Français",
+  "welcome_message": "Bienvenue dans notre salon de beauté ! Comment puis-je vous aider pour votre rendez-vous ?",
+  "appointment_confirmed": "Votre rendez-vous a été confirmé avec succès !",
+  "appointment_details": "Date : {date} à {time}\nPrestation : {service}\nSpécialiste : {master}\nAdresse : {address}",
+  "reminder_24h": "Rappel : vous avez rendez-vous demain à {time} pour {service}. Merci de confirmer votre venue.",
+  "reminder_2h": "Votre rendez-vous est dans 2 heures ({time}). Temps de trajet : ~{travel_time}. Itinéraire : {route_link}",
+  "confirm_button": "Confirmer",
+  "reschedule_button": "Déplacer",
+  "cancel_button": "Annuler",
+  "prepayment_request": "Pour confirmer votre réservation, veuillez régler l'acompte de {amount} {currency} : {payment_link}",
+  "feedback_request": "Merci de votre visite ! Comment évaluez-vous votre expérience de 1 à 5 étoiles ?",
+  "google_review_invite": "Ravis que cela vous ait plu ! Laissez-nous un avis sur Google Maps : {review_link}"
+}

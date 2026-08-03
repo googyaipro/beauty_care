@@ -1,0 +1,14 @@
+{
+  "language": "Deutsch",
+  "welcome_message": "Willkommen im Schönheitssalon! Wie kann ich Ihnen heute bei Ihrer Terminbuchung helfen?",
+  "appointment_confirmed": "Ihr Termin wurde erfolgreich bestätigt!",
+  "appointment_details": "Datum: {date} um {time}\nDienstleistung: {service}\nStylist: {master}\nAdresse: {address}",
+  "reminder_24h": "Erinnerung: Sie haben morgen um {time} einen Termin für {service}. Bitte bestätigen Sie Ihren Besuch.",
+  "reminder_2h": "Ihr Termin ist in 2 Stunden ({time}). Fahrzeit: ~{travel_time}. Route: {route_link}",
+  "confirm_button": "Bestätigen",
+  "reschedule_button": "Verschieben",
+  "cancel_button": "Stornieren",
+  "prepayment_request": "Um Ihre Buchung zu bestätigen, zahlen Sie bitte die Anzahlung von {amount} {currency}: {payment_link}",
+  "feedback_request": "Vielen Dank für Ihren Besuch! Wie bewerten Sie Ihre Erfahrung heute von 1 bis 5 Sternen?",
+  "google_review_invite": "Wir freuen uns, dass es Ihnen gefallen hat! Hinterlassen Sie uns gerne eine Bewertung: {review_link}"
+}

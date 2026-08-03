@@ -1,0 +1,14 @@
+{
+  "language": "ქართული",
+  "welcome_message": "მოგესალმებით სილამაზის სალონში! რით შემიძლია დაგეხმაროთ დღეს?",
+  "appointment_confirmed": "თქვენი ჩაწერა წარმატებით დადასტურდა!",
+  "appointment_details": "თარიღი: {date} {time}-ზე\nმომსახურება: {service}\nოსტატი: {master}\nმისამართი: {address}",
+  "reminder_24h": "შეგახსენებთ: ხვალ გაქვთ ჩაწერა {time}-ზე ({service}). გთხოვთ დაადასტუროთ ვიზიტი.",
+  "reminder_2h": "თქვენი ვიზიტი იწყება 2 საათში ({time}). მგზავრობის დრო: ~{travel_time}. მარშრუტის ლინკი: {route_link}",
+  "confirm_button": "ვადსტურებ",
+  "reschedule_button": "გადატანა",
+  "cancel_button": "გაუქმება",
+  "prepayment_request": "ჩაწერის დასაფიქსირებლად გთხოვთ გადაიხადოთ ავანსი {amount} {currency} ბმულზე: {payment_link}",
+  "feedback_request": "გმადლობთ ვიზიტისთვის! გთხოვთ შეაფასოთ ჩვენი მომსახურება 1-დან 5 ვარსკვლავამდე.",
+  "google_review_invite": "მიხარია, რომ კმაყოფილი დარჩით! მადლობელი ვიქნებით თუ დაგვიტოვებთ შეფასებას: {review_link}"
+}

@@ -1,6 +1,6 @@
 """Multilingual Admin CMS, Client Landing Widget & Staff Portal for Beauty Care.
 
-Includes LIVE Multi-Tab Interactive Admin Dashboard for IT Super Admin & Salon Managers.
+Includes REAL-TIME Client Dialogue Inspector connected to SharedDialogueStore across all Gateways.
 """
 
 from typing import Any, Dict, List
@@ -12,51 +12,21 @@ import uvicorn
 from common.health_checker import attach_health_routes
 from common.language_detector import detect_language, get_text
 from common.pii_sanitizer import PIISanitizer
-from common.dialogue_archiver import DialogueArchiver
+from common.dialogue_store import (
+    SharedDialogueStore,
+    SharedSettingsStore,
+    SharedUserStore,
+    SharedWikiStore,
+)
 from common.rbac import Role, Permission, has_permission
 
 app = FastAPI(
-    title="Beauty Care Platform UI & Admin Dashboard",
-    description="Client Web Booking Widget & Interactive Staff Admin Portal",
+    title="Beauty Care Platform UI & Real-Time Admin Dashboard",
+    description="Client Web Booking Widget & Real-Time Staff Admin Portal",
     version="1.0.0",
 )
 
 attach_health_routes(app, service_name="beauty_care_admin_cms")
-
-archiver = DialogueArchiver()
-
-# State settings
-_system_settings = {
-    "save_audio_recordings": False,
-    "primary_language": "en",
-    "supported_languages": ["en", "ru", "ka", "de", "it", "es", "fr"],
-    "payment_provider": "stripe",
-    "gcp_project": "beauty-care-platform",
-}
-
-# User accounts database
-_staff_users = [
-    {"email": "admin@oxyjet.win", "name": "Super Admin", "role": "super_admin"},
-    {"email": "manager@oxyjet.win", "name": "Elena Manager", "role": "salon_manager"},
-    {"email": "anna@oxyjet.win", "name": "Anna Stylist", "role": "master"},
-]
-
-_wiki_articles: List[Dict[str, Any]] = [
-    {
-        "id": "wiki_1",
-        "title": "Hair Coloring Pre-Care Advice",
-        "category": "hair",
-        "language": "en",
-        "content": "Do not wash your hair 24 hours prior to bleaching or complex coloring to protect your scalp.",
-    },
-    {
-        "id": "wiki_2",
-        "title": "Уход после чистки лица",
-        "category": "cosmetology",
-        "language": "ru",
-        "content": "Избегайте посещения сауны, солярия и интенсивных тренировок в течение 48 часов после глубокой чистки лица.",
-    },
-]
 
 
 class ChatMessageRequest(BaseModel):
@@ -82,6 +52,62 @@ class AudioToggleRequest(BaseModel):
     enabled: bool
 
 
+# REAL-TIME REST API ENDPOINTS
+
+@app.get("/api/v1/admin/dialogues")
+async def get_realtime_dialogues(limit: int = 100) -> List[Dict[str, Any]]:
+    """REST API: Get all real-time client messages across Telegram, WhatsApp, Web Widget, and curl tests."""
+    return SharedDialogueStore.get_all_messages(limit=limit)
+
+
+@app.get("/api/v1/admin/settings")
+async def get_settings() -> Dict[str, Any]:
+    """REST API: Get current system settings."""
+    return SharedSettingsStore.get_settings()
+
+
+@app.post("/api/v1/admin/settings/audio_toggle")
+async def toggle_audio_recording(req: AudioToggleRequest) -> Dict[str, Any]:
+    """REST API: Toggle raw audio file retention ON/OFF."""
+    updated = SharedSettingsStore.update_settings({"save_audio_recordings": req.enabled})
+    return {
+        "status": "updated",
+        "save_audio_recordings": updated["save_audio_recordings"],
+        "message": f"Audio file retention is now {'ENABLED' if req.enabled else 'DISABLED'}",
+    }
+
+
+@app.get("/api/v1/admin/users")
+async def list_staff_users() -> List[Dict[str, Any]]:
+    """REST API: List all registered staff members."""
+    return SharedUserStore.get_users()
+
+
+@app.post("/api/v1/admin/users/register", status_code=status.HTTP_201_CREATED)
+async def register_staff_user(user: UserRegistration) -> Dict[str, Any]:
+    """REST API: Register a new staff member."""
+    record = SharedUserStore.add_user(name=user.name, email=user.email, role=user.role)
+    return {"status": "registered", "user": record}
+
+
+@app.get("/api/v1/admin/wiki")
+async def list_wiki_articles() -> List[Dict[str, Any]]:
+    """REST API: List all RAG Wiki articles."""
+    return SharedWikiStore.get_articles()
+
+
+@app.post("/api/v1/admin/wiki", status_code=status.HTTP_201_CREATED)
+async def create_wiki_article(article: WikiArticle) -> Dict[str, Any]:
+    """REST API: Create a new RAG Wiki article."""
+    record = SharedWikiStore.add_article(
+        title=article.title,
+        category=article.category,
+        language=article.language,
+        content=article.content,
+    )
+    return {"status": "created", "article": record}
+
+
 @app.post("/api/v1/chat")
 async def handle_live_chat(req: ChatMessageRequest) -> Dict[str, Any]:
     """LIVE Multi-Agent Chat Endpoint for Web Booking Widget."""
@@ -94,7 +120,8 @@ async def handle_live_chat(req: ChatMessageRequest) -> Dict[str, Any]:
     sanitizer = PIISanitizer()
     sanitized_text, _ = sanitizer.sanitize(user_text)
 
-    archiver.archive_message(
+    # Record User Message
+    SharedDialogueStore.add_message(
         session_id=req.session_id,
         sender_role="user",
         content=user_text,
@@ -116,7 +143,8 @@ async def handle_live_chat(req: ChatMessageRequest) -> Dict[str, Any]:
     else:
         agent_reply = get_text(lang, "welcome_message")
 
-    archiver.archive_message(
+    # Record Agent Reply
+    SharedDialogueStore.add_message(
         session_id=req.session_id,
         sender_role="agent",
         content=agent_reply,
@@ -154,7 +182,6 @@ async def get_client_landing_page() -> str:
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Outfit', sans-serif; }
-
         body { background: var(--bg-gradient); color: var(--text-main); min-height: 100vh; padding: 2rem; display: flex; justify-content: center; }
         .container { max-width: 1200px; width: 100%; }
 
@@ -328,7 +355,7 @@ async def get_register_page() -> str:
                 body: JSON.stringify({ name, email, password: 'secret_pass', role })
             });
             const data = await res.json();
-            alert('Staff user registered successfully: ' + data.name + ' (' + data.role + ')');
+            alert('Staff user registered successfully!');
             location.href = '/dashboard';
         }
     </script>
@@ -339,12 +366,12 @@ async def get_register_page() -> str:
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def get_interactive_dashboard_page() -> str:
-    """Rich Multi-Tab Interactive Admin Dashboard for IT Super Admin & Salon Managers."""
+    """Rich Multi-Tab Real-Time Admin Dashboard for IT Super Admin & Salon Managers."""
     return """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>🌸 Interactive Admin Dashboard — Beauty Care</title>
+    <title>🌸 Real-Time Admin Dashboard — Beauty Care</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -383,6 +410,10 @@ async def get_interactive_dashboard_page() -> str:
         .table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
         .table th, .table td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--card-border); font-size: 0.9rem; }
         .table th { color: var(--text-muted); font-weight: 600; }
+        .badge-channel { padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 600; }
+        .ch-telegram { background: rgba(6, 182, 212, 0.2); color: #06b6d4; }
+        .ch-whatsapp { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .ch-web_widget { background: rgba(236, 72, 153, 0.2); color: #ec4899; }
     </style>
 </head>
 <body>
@@ -397,15 +428,34 @@ async def get_interactive_dashboard_page() -> str:
 
         <!-- Navigation Tabs -->
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('overview')">📊 System Overview</button>
+            <button class="tab-btn active" onclick="switchTab('chats')">💬 Real-Time Chat Inspector</button>
+            <button class="tab-btn" onclick="switchTab('overview')">📊 System Overview</button>
             <button class="tab-btn" onclick="switchTab('wiki')">📚 RAG Wiki Editor</button>
             <button class="tab-btn" onclick="switchTab('staff')">👥 Staff & Roles</button>
-            <button class="tab-btn" onclick="switchTab('chats')">💬 Chat Inspector</button>
             <button class="tab-btn" onclick="switchTab('settings')">⚙️ Security & Audio</button>
         </div>
 
-        <!-- Tab 1: System Overview & Telemetry -->
-        <div id="tab-overview" class="tab-content active">
+        <!-- Tab 1: REAL-TIME CLIENT CHAT INSPECTOR -->
+        <div id="tab-chats" class="tab-content active">
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                    <h2>💬 Real-Time Client Dialogue Inspector</h2>
+                    <button onclick="loadRealtimeChats()" style="width:auto; padding:0.4rem 1rem;">🔄 Refresh Now</button>
+                </div>
+                <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:1rem;">Live feed of all client messages across Telegram, WhatsApp, Web Widget, and curl tests.</p>
+                <table class="table">
+                    <thead>
+                        <tr><th>Time</th><th>Channel</th><th>Session / Client</th><th>Role</th><th>Lang</th><th>Message Content</th></tr>
+                    </thead>
+                    <tbody id="chatsTableBody">
+                        <tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Loading real-time dialogues...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab 2: System Overview & Telemetry -->
+        <div id="tab-overview" class="tab-content">
             <div class="cards">
                 <div class="card">
                     <h2>🟢 Service Health Probes</h2>
@@ -427,7 +477,7 @@ async def get_interactive_dashboard_page() -> str:
             </div>
         </div>
 
-        <!-- Tab 2: RAG Wiki Knowledge Base Editor -->
+        <!-- Tab 3: RAG Wiki Knowledge Base Editor -->
         <div id="tab-wiki" class="tab-content">
             <div class="cards">
                 <div class="card">
@@ -463,7 +513,7 @@ async def get_interactive_dashboard_page() -> str:
             </div>
         </div>
 
-        <!-- Tab 3: Staff & Role Management -->
+        <!-- Tab 4: Staff & Role Management -->
         <div id="tab-staff" class="tab-content">
             <div class="cards">
                 <div class="card">
@@ -492,35 +542,6 @@ async def get_interactive_dashboard_page() -> str:
                         </tbody>
                     </table>
                 </div>
-            </div>
-        </div>
-
-        <!-- Tab 4: Chat Inspector -->
-        <div id="tab-chats" class="tab-content">
-            <div class="card">
-                <h2>💬 Real-Time Client Dialogue Inspector</h2>
-                <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:1rem;">Inspect live conversations across WhatsApp, Telegram, and Web Chat Widget.</p>
-                <table class="table">
-                    <thead>
-                        <tr><th>Time</th><th>Channel</th><th>Lang</th><th>Client Request</th><th>AI Agent Reply</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>18:20</td>
-                            <td><span style="color:#10b981;">WhatsApp</span></td>
-                            <td>RU</td>
-                            <td>Хочу записаться на окрашивание в эту пятницу</td>
-                            <td>Отлично! У мастера Анны на эту пятницу в Google Календаре есть свободные окна...</td>
-                        </tr>
-                        <tr>
-                            <td>17:45</td>
-                            <td><span style="color:#06b6d4;">Telegram</span></td>
-                            <td>EN</td>
-                            <td>What are the pre-care steps for hair bleaching?</td>
-                            <td>Do not wash your hair 24 hours prior to bleaching to protect your scalp...</td>
-                        </tr>
-                    </tbody>
-                </table>
             </div>
         </div>
 
@@ -559,7 +580,41 @@ async def get_interactive_dashboard_page() -> str:
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             event.target.classList.add('active');
             document.getElementById('tab-' + name).classList.add('active');
+
+            if (name === 'chats') {
+                loadRealtimeChats();
+            }
         }
+
+        async function loadRealtimeChats() {
+            try {
+                const res = await fetch('/api/v1/admin/dialogues');
+                const dialogues = await res.json();
+
+                const tbody = document.getElementById('chatsTableBody');
+                if (!dialogues || dialogues.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No messages recorded yet. Send a curl test or message on WhatsApp/Telegram!</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = dialogues.reverse().map(d => `
+                    <tr>
+                        <td>${d.timestamp || ''}</td>
+                        <td><span class="badge-channel ch-${d.channel.toLowerCase()}">${d.channel.toUpperCase()}</span></td>
+                        <td><code>${d.session_id}</code></td>
+                        <td><strong style="color:${d.sender_role === 'user' ? '#ec4899' : '#a855f7'}">${d.sender_role.toUpperCase()}</strong></td>
+                        <td>${d.language || 'EN'}</td>
+                        <td>${d.content}</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load chats:', err);
+            }
+        }
+
+        // Auto-refresh Chat Inspector every 4 seconds
+        setInterval(loadRealtimeChats, 4000);
+        loadRealtimeChats();
 
         async function addWikiArticle() {
             const title = document.getElementById('wikiTitle').value;
@@ -575,7 +630,7 @@ async def get_interactive_dashboard_page() -> str:
             });
             const data = await res.json();
             alert('Article saved to RAG Knowledge Base!');
-            
+
             const tbody = document.getElementById('wikiTableBody');
             tbody.innerHTML += `<tr><td>${title}</td><td>${category}</td><td>${language.toUpperCase()}</td></tr>`;
         }
@@ -611,52 +666,6 @@ async def get_interactive_dashboard_page() -> str:
 </body>
 </html>
 """
-
-
-@app.post("/api/v1/admin/users/register", status_code=status.HTTP_201_CREATED)
-async def register_staff_user(user: UserRegistration) -> Dict[str, Any]:
-    """Register a new staff member (Manager, Receptionist, Master, Admin)."""
-    record = user.model_dump()
-    _staff_users.append(record)
-    return {"status": "registered", "name": user.name, "email": user.email, "role": user.role}
-
-
-@app.get("/api/v1/admin/users")
-async def list_staff_users() -> List[Dict[str, Any]]:
-    """List all registered staff members."""
-    return _staff_users
-
-
-@app.get("/api/v1/admin/settings")
-async def get_settings() -> Dict[str, Any]:
-    """Get global platform settings."""
-    return _system_settings
-
-
-@app.post("/api/v1/admin/settings/audio_toggle")
-async def toggle_audio_recording(req: AudioToggleRequest) -> Dict[str, Any]:
-    """Toggle raw audio file retention ON/OFF."""
-    _system_settings["save_audio_recordings"] = req.enabled
-    return {
-        "status": "updated",
-        "save_audio_recordings": _system_settings["save_audio_recordings"],
-        "message": f"Audio file retention is now {'ENABLED' if req.enabled else 'DISABLED'}",
-    }
-
-
-@app.get("/api/v1/admin/wiki")
-async def list_wiki_articles() -> List[Dict[str, Any]]:
-    """List all RAG Wiki articles."""
-    return _wiki_articles
-
-
-@app.post("/api/v1/admin/wiki", status_code=status.HTTP_201_CREATED)
-async def create_wiki_article(article: WikiArticle) -> Dict[str, Any]:
-    """Create a new RAG Wiki article."""
-    art_id = f"wiki_{len(_wiki_articles) + 1}"
-    record = {"id": art_id, **article.model_dump()}
-    _wiki_articles.append(record)
-    return {"status": "created", "article": record}
 
 
 if __name__ == "__main__":

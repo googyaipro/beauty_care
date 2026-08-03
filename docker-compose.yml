@@ -9,6 +9,8 @@ services:
       - "8000:8000"
     environment:
       - PRODUCTION_DOMAIN=beauty-registry.oxyjet.win
+      - GOOGLE_CLOUD_PROJECT=beauty-care-platform
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - shared_data:/app/data
     restart: always
@@ -19,6 +21,9 @@ services:
     command: python3 mcp_servers/google_calendar_crm_mcp/server.py
     ports:
       - "8015:8015"
+    environment:
+      - GOOGLE_CLOUD_PROJECT=beauty-care-platform
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - shared_data:/app/data
     restart: always
@@ -39,6 +44,9 @@ services:
     command: python3 mcp_servers/maps_mcp/server.py
     ports:
       - "8014:8014"
+    environment:
+      - GOOGLE_CLOUD_PROJECT=beauty-care-platform
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - shared_data:/app/data
     restart: always
@@ -51,6 +59,8 @@ services:
       - "8019:8019"
     environment:
       - PRODUCTION_DOMAIN=beauty-admin.oxyjet.win
+      - GOOGLE_CLOUD_PROJECT=beauty-care-platform
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - shared_data:/app/data
     restart: always
@@ -63,6 +73,8 @@ services:
       - "8021:8021"
     environment:
       - BASE_API_URL=https://beauty-api.oxyjet.win
+      - GOOGLE_CLOUD_PROJECT=beauty-care-platform
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - shared_data:/app/data
     restart: always
@@ -75,6 +87,8 @@ services:
       - "8022:8022"
     environment:
       - BASE_API_URL=https://beauty-api.oxyjet.win
+      - GOOGLE_CLOUD_PROJECT=beauty-care-platform
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - shared_data:/app/data
     restart: always

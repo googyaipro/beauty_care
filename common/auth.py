@@ -2,16 +2,22 @@
 
 Loads service-account-key.json via Google Application Default Credentials (ADC),
 file path, OR direct JSON environment variable SERVICE_ACCOUNT_KEY_JSON.
+Never crashes on startup if key file is missing.
 """
 
 import json
 import os
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Any
 
-import google.auth
-import google.auth.transport.requests
-from google.oauth2 import service_account
+try:
+    import google.auth
+    import google.auth.transport.requests
+    from google.oauth2 import service_account
+    HAS_GOOGLE_AUTH = True
+except ImportError:
+    HAS_GOOGLE_AUTH = False
+
 
 KEY_PATH = Path("/app/service-account-key.json")
 LOCAL_KEY_PATH = Path(__file__).resolve().parent.parent / "service-account-key.json"
@@ -19,6 +25,9 @@ LOCAL_KEY_PATH = Path(__file__).resolve().parent.parent / "service-account-key.j
 
 def get_service_account_credentials():
     """Load Google Service Account credentials from JSON env string, JSON file, or ADC."""
+    if not HAS_GOOGLE_AUTH:
+        return None
+
     scopes = [
         "https://www.googleapis.com/auth/cloud-platform",
         "https://www.googleapis.com/auth/calendar",
@@ -40,7 +49,9 @@ def get_service_account_credentials():
     elif LOCAL_KEY_PATH.exists():
         key_file = str(LOCAL_KEY_PATH)
     elif "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
-        key_file = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+        env_file = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+        if os.path.exists(env_file):
+            key_file = env_file
 
     if key_file and os.path.exists(key_file):
         try:
@@ -48,25 +59,43 @@ def get_service_account_credentials():
         except Exception as exc:
             print(f"Error loading key file {key_file}: {exc}")
 
-    # Option 3: Standard GCP ADC Fallback
-    credentials, _ = google.auth.default()
-    return credentials
+    # Option 3: Standard GCP ADC Fallback (fail-safe)
+    try:
+        credentials, _ = google.auth.default()
+        return credentials
+    except Exception as exc:
+        print(f"GCP ADC fallback unavailable: {exc}")
+        return None
 
 
 def get_dynamic_headers(context=None) -> Dict[str, str]:
     """Fetch fresh OIDC headers each call to avoid token expiry."""
     try:
         credentials = get_service_account_credentials()
-        auth_request = google.auth.transport.requests.Request()
-        credentials.refresh(auth_request)
+        if credentials:
+            auth_request = google.auth.transport.requests.Request()
+            credentials.refresh(auth_request)
 
-        headers = {
-            "Authorization": f"Bearer {credentials.token}",
-            "Content-Type": "application/json",
-        }
-        quota_project_id = getattr(credentials, "quota_project_id", None) or os.environ.get("GOOGLE_CLOUD_PROJECT", "beauty-care-platform")
-        if quota_project_id:
-            headers["x-goog-user-project"] = quota_project_id
-        return headers
+            headers = {
+                "Authorization": f"Bearer {credentials.token}",
+                "Content-Type": "application/json",
+            }
+            quota_project_id = getattr(credentials, "quota_project_id", None) or os.environ.get("GOOGLE_CLOUD_PROJECT", "beauty-care-platform")
+            if quota_project_id:
+                headers["x-goog-user-project"] = quota_project_id
+            return headers
     except Exception:
-        return {"Content-Type": "application/json"}
+        pass
+
+    return {"Content-Type": "application/json"}
+
+
+A2A_SECRET_TOKEN = os.environ.get("A2A_SECRET_TOKEN", "beauty-care-a2a-secret-2026")
+
+
+def verify_a2a_bearer_token(auth_header: str) -> bool:
+    """Verify that incoming A2A HTTP request contains valid Bearer token."""
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return False
+    token = auth_header.split(" ", 1)[1].strip()
+    return token == A2A_SECRET_TOKEN

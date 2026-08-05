@@ -1,9 +1,10 @@
 """Telegram & WhatsApp Gateway Router.
 
-Handles both Telegram and WhatsApp webhooks so that beauty-api.oxyjet.win works 100%
-regardless of whether Dokploy routes port 8021 or 8022.
+Handles both Telegram and WhatsApp webhooks with REAL DYNAMIC HTTP queries to
+Google Calendar CRM MCP and Google Maps MCP via common.orchestrator.
 """
 
+import uuid
 from typing import Any, Dict
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -13,6 +14,9 @@ from common.health_checker import attach_health_routes
 from common.language_detector import detect_language
 from common.pii_sanitizer import PIISanitizer
 from common.dialogue_store import SharedDialogueStore
+from common.rate_limiter import check_rate_limit
+from common.telemetry import trace_step
+from common.orchestrator import generate_dynamic_agent_response
 
 app = FastAPI(
     title="Telegram & WhatsApp Gateway",
@@ -35,88 +39,106 @@ class WhatsAppWebhookPayload(BaseModel):
 
 @app.post("/v1/webhook/whatsapp")
 async def handle_whatsapp_webhook(payload: WhatsAppWebhookPayload) -> Dict[str, Any]:
-    """Receive WhatsApp webhook payload."""
-    user_text = payload.message_text.strip()
-    lang = detect_language(user_text)
+    """Receive WhatsApp webhook payload with dynamic CRM & Maps MCP resolution."""
+    check_rate_limit(f"wa_{payload.phone_number}")
+    trace_id = str(uuid.uuid4())
 
-    sanitizer = PIISanitizer()
-    sanitized_text, _ = sanitizer.sanitize(user_text)
+    with trace_step(trace_id, "WhatsApp_Webhook"):
+        user_text = payload.message_text.strip()
+        lang = detect_language(user_text)
 
-    SharedDialogueStore.add_message(
-        session_id=f"wa_{payload.phone_number}",
-        sender_role="user",
-        content=user_text,
-        channel="whatsapp",
-        language=lang,
-    )
+        sanitizer = PIISanitizer()
+        sanitized_text, _ = sanitizer.sanitize(user_text)
 
-    user_lower = user_text.lower()
-    if any(w in user_lower for w in ["окрашивание", "hair coloring", "стрижк", "haircut", "пятниц", "friday", "записаться", "book"]):
-        if lang == "ru":
-            bot_reply = "Отлично! У мастера Анны на эту пятницу в Google Календаре есть свободные окна: 10:00, 12:30, 15:00 и 17:30. Какое время вам больше подходит?"
-        else:
-            bot_reply = "Great! Top Stylist Anna has open slots in Google Calendar for this Friday: 10:00 AM, 12:30 PM, 3:00 PM, and 5:30 PM. Which time works best for you?"
-    else:
-        bot_reply = f"[WhatsApp AI Concierge ({lang.upper()})]: Hello! Welcome to Beauty Care. How can we help you today?"
+        session_id = f"wa_{payload.phone_number}"
 
-    SharedDialogueStore.add_message(
-        session_id=f"wa_{payload.phone_number}",
-        sender_role="agent",
-        content=bot_reply,
-        channel="whatsapp",
-        language=lang,
-    )
+        # Save incoming user message
+        SharedDialogueStore.add_message(
+            session_id=session_id,
+            sender_role="user",
+            content=user_text,
+            channel="whatsapp",
+            language=lang,
+        )
 
-    return {
-        "status": "ok",
-        "phone_number": payload.phone_number,
-        "language_detected": lang,
-        "reply": bot_reply,
-    }
+        # Generate REAL DYNAMIC response via Google Calendar CRM & Maps MCP
+        structured_msg = await generate_dynamic_agent_response(
+            user_text=user_text,
+            lang=lang,
+            session_id=session_id,
+            trace_id=trace_id,
+        )
+
+        # Save dynamic agent response
+        SharedDialogueStore.add_message(
+            session_id=session_id,
+            sender_role="agent",
+            content=structured_msg.text_response,
+            channel="whatsapp",
+            language=lang,
+        )
+
+        return {
+            "status": "ok",
+            "phone_number": payload.phone_number,
+            "language_detected": lang,
+            "reply": structured_msg.text_response,
+            "buttons": [b.model_dump() for b in structured_msg.buttons],
+            "trace_id": trace_id,
+        }
 
 
 @app.post("/v1/webhook/telegram")
 async def handle_telegram_webhook(payload: TelegramWebhookPayload) -> Dict[str, Any]:
-    """Receive Telegram webhook payload."""
+    """Receive Telegram webhook payload with dynamic CRM & Maps MCP resolution."""
     msg = payload.message
     chat_id = str(msg.get("chat", {}).get("id", "777"))
-    user_text = msg.get("text", "")
-    lang = detect_language(user_text)
+    check_rate_limit(f"tg_{chat_id}")
+    trace_id = str(uuid.uuid4())
 
-    sanitizer = PIISanitizer()
-    sanitized_text, _ = sanitizer.sanitize(user_text)
+    with trace_step(trace_id, "Telegram_Webhook"):
+        user_text = msg.get("text", "")
+        lang = detect_language(user_text)
 
-    SharedDialogueStore.add_message(
-        session_id=f"tg_{chat_id}",
-        sender_role="user",
-        content=user_text,
-        channel="telegram",
-        language=lang,
-    )
+        sanitizer = PIISanitizer()
+        sanitized_text, _ = sanitizer.sanitize(user_text)
 
-    user_lower = user_text.lower()
-    if any(w in user_lower for w in ["окрашивание", "hair coloring", "стрижк", "haircut", "пятниц", "friday", "записаться", "book"]):
-        if lang == "ru":
-            bot_reply = "Отлично! У мастера Анны на эту пятницу в Google Календаре есть свободные окна: 10:00, 12:30, 15:00 и 17:30. Какое время вам больше подходит?"
-        else:
-            bot_reply = "Great! Top Stylist Anna has open slots in Google Calendar for this Friday: 10:00 AM, 12:30 PM, 3:00 PM, and 5:30 PM. Which time works best for you?"
-    else:
-        bot_reply = f"[Telegram Bot ({lang.upper()})]: Здравствуйте! Я ИИ-Администратор салона Beauty Care. Чем могу помочь вам сегодня?"
+        session_id = f"tg_{chat_id}"
 
-    SharedDialogueStore.add_message(
-        session_id=f"tg_{chat_id}",
-        sender_role="agent",
-        content=bot_reply,
-        channel="telegram",
-        language=lang,
-    )
+        # Save user message
+        SharedDialogueStore.add_message(
+            session_id=session_id,
+            sender_role="user",
+            content=user_text,
+            channel="telegram",
+            language=lang,
+        )
 
-    return {
-        "status": "ok",
-        "chat_id": chat_id,
-        "language_detected": lang,
-        "reply": bot_reply,
-    }
+        # Generate REAL DYNAMIC response via Google Calendar CRM & Maps MCP
+        structured_msg = await generate_dynamic_agent_response(
+            user_text=user_text,
+            lang=lang,
+            session_id=session_id,
+            trace_id=trace_id,
+        )
+
+        # Save dynamic agent response
+        SharedDialogueStore.add_message(
+            session_id=session_id,
+            sender_role="agent",
+            content=structured_msg.text_response,
+            channel="telegram",
+            language=lang,
+        )
+
+        return {
+            "status": "ok",
+            "chat_id": chat_id,
+            "language_detected": lang,
+            "reply": structured_msg.text_response,
+            "buttons": [b.model_dump() for b in structured_msg.buttons],
+            "trace_id": trace_id,
+        }
 
 
 if __name__ == "__main__":

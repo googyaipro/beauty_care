@@ -17,10 +17,13 @@ from common.telemetry import trace_step
 GCAL_CRM_URL = os.environ.get("GCAL_CRM_URL", "http://localhost:8015")
 MAPS_MCP_URL = os.environ.get("MAPS_MCP_URL", "http://localhost:8014")
 
-# Configure GenAI Client
+# Configure GenAI and ADK Clients
 try:
     from google import genai
     from google.genai import types
+    import google.adk as adk
+    from google.adk.sessions import InMemorySessionService
+    from google.adk.runners import Runner
 
     # Force using service account key file
     if LOCAL_KEY_PATH.exists():
@@ -32,9 +35,11 @@ try:
 
     genai_client = genai.Client(vertexai=use_vertex, project=project_id, location=location)
     HAS_GENAI = True
+    HAS_ADK = True
 except Exception as e:
-    print(f"Failed to initialize Gemini Client: {e}")
+    print(f"Failed to initialize Gemini Client or ADK: {e}")
     HAS_GENAI = False
+    HAS_ADK = False
     genai_client = None
 
 
@@ -44,7 +49,7 @@ async def generate_dynamic_agent_response(
     session_id: str,
     trace_id: str = "default",
 ) -> StructuredAgentMessage:
-    """Dynamically route user query to CRM MCP, Maps MCP, and generate structured output via Gemini with PII sanitization and telemetry tracing."""
+    """Dynamically route user query to CRM MCP, Maps MCP, and generate structured output via ADK 2.0 Agent and Runner."""
     
     # 1. Sanitize user input (PII compliance GDPR / 152-ФЗ)
     sanitizer = PIISanitizer()
@@ -110,11 +115,11 @@ async def generate_dynamic_agent_response(
         history_sanitized.append(f"{m['sender_role'].upper()}: {san_hist_content}")
     history_str = "\n".join(history_sanitized)
     
-    # 7. Call Gemini if available for structured reasoning and response formatting
-    if HAS_GENAI and genai_client:
+    # 7. Call ADK Agent 2.0 if available for structured reasoning and response formatting
+    if HAS_GENAI and HAS_ADK and genai_client:
         with trace_step(trace_id, "llm_generation", {"model": "gemini-3.5-flash"}):
             try:
-                # Build system instructions (explicitly tell Gemini to preserve PII tokens like [PHONE_TOKEN_...])
+                # Build system instructions
                 system_instruction = (
                     "You are the AI Concierge Receptionist for Beauty Care salon (domain oxyjet.win).\n"
                     f"You respond to the user in their preferred language (detected: {lang.upper()}).\n"
@@ -139,46 +144,48 @@ async def generate_dynamic_agent_response(
                 
                 # Use gemini-3.5-flash by default (user requirement) with fallback to gemini-2.5-flash
                 primary_model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
-                try:
-                    response = genai_client.models.generate_content(
-                        model=primary_model,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            response_schema=StructuredAgentMessage,
-                            system_instruction=system_instruction,
-                            temperature=0.2,
-                        )
+                
+                async def run_adk_agent(model_name: str) -> str:
+                    agent = adk.Agent(
+                        name="concierge_agent",
+                        model=model_name,
+                        instruction=system_instruction,
+                        output_schema=StructuredAgentMessage,
+                        generate_content_config={
+                            "response_mime_type": "application/json",
+                            "temperature": 0.2
+                        }
                     )
+                    session_service = InMemorySessionService()
+                    runner = Runner(agent=agent, app_name="beauty_care", session_service=session_service, auto_create_session=True)
+                    
+                    content = types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
+                    events = runner.run_async(
+                        session_id=session_id,
+                        user_id="user_1",
+                        new_message=content
+                    )
+                    
+                    response_text = ""
+                    async for event in events:
+                        if hasattr(event, "content") and event.content:
+                            if event.content.parts and event.content.parts[0].text:
+                                response_text = event.content.parts[0].text
+                    return response_text
+                
+                try:
+                    raw_response = await run_adk_agent(primary_model)
                 except Exception as exc:
                     err_msg = str(exc)
                     if "NOT_FOUND" in err_msg or "was not found" in err_msg or "404" in err_msg:
                         fallback_model = "gemini-2.5-flash"
                         print(f"Model {primary_model} not found, falling back to {fallback_model}")
-                        response = genai_client.models.generate_content(
-                            model=fallback_model,
-                            contents=prompt,
-                            config=types.GenerateContentConfig(
-                                response_mime_type="application/json",
-                                response_schema=StructuredAgentMessage,
-                                system_instruction=system_instruction,
-                                temperature=0.2,
-                            )
-                        )
+                        raw_response = await run_adk_agent(fallback_model)
                     else:
                         raise exc
                 
-                if getattr(response, "parsed", None):
-                    parsed_data = response.parsed
-                    if isinstance(parsed_data, StructuredAgentMessage):
-                        parsed_msg = parsed_data
-                    elif isinstance(parsed_data, dict):
-                        parsed_msg = StructuredAgentMessage.model_validate(parsed_data)
-                    else:
-                        parsed_msg = StructuredAgentMessage.model_validate(json.loads(response.text))
-                else:
-                    parsed_msg = StructuredAgentMessage.model_validate(json.loads(response.text))
-                    
+                parsed_msg = StructuredAgentMessage.model_validate(json.loads(raw_response))
+                
                 parsed_msg.metadata = parsed_msg.metadata or {}
                 parsed_msg.metadata.update({"session_id": session_id, "trace_id": trace_id})
                 
@@ -191,7 +198,7 @@ async def generate_dynamic_agent_response(
                 return parsed_msg
                 
             except Exception as exc:
-                print(f"Gemini generation error, falling back to rule-based: {exc}")
+                print(f"ADK Agent run error, falling back to rule-based: {exc}")
             
     # 8. Core fallback (Rule-based output)
     text_parts = []

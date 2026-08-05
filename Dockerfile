@@ -2,6 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Ensure Python looks at /app for all module imports
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -22,8 +26,8 @@ COPY agents/ agents/
 COPY gateways/ gateways/
 COPY admin_cms/ admin_cms/
 
-# Install dependencies in production mode
-RUN uv pip install --system .
+# Install dependencies in editable mode to ensure live module updates
+RUN uv pip install --system --no-build-isolation -e .
 
 EXPOSE 8000 8014 8015 8016 8019 8021 8022
 

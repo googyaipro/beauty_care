@@ -12,8 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv package manager
-RUN pip install --no-cache-dir uv
+# Install uv package manager and hatchling build backend
+RUN pip install --no-cache-dir uv hatchling
 
 # Copy pyproject.toml and source code
 COPY pyproject.toml .
@@ -26,8 +26,8 @@ COPY agents/ agents/
 COPY gateways/ gateways/
 COPY admin_cms/ admin_cms/
 
-# Install dependencies in editable mode to ensure live module updates
-RUN uv pip install --system --no-build-isolation -e .
+# Install dependencies cleanly
+RUN uv pip install --system .
 
 EXPOSE 8000 8014 8015 8016 8019 8021 8022
 

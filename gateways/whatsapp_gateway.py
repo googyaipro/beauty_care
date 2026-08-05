@@ -1,8 +1,9 @@
-"""WhatsApp & Telegram Gateway Router.
+import os
+import sys
 
-Handles both WhatsApp and Telegram webhooks with REAL DYNAMIC HTTP queries to
-Google Calendar CRM MCP and Google Maps MCP via common.orchestrator.
-"""
+# Ensure /app root directory is in sys.path for common.* imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, "/app")
 
 import uuid
 from typing import Any, Dict

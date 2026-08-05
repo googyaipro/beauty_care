@@ -1,8 +1,9 @@
-"""Telegram & WhatsApp Gateway Router.
+import os
+import sys
 
-Handles both Telegram and WhatsApp webhooks with REAL DYNAMIC HTTP queries to
-Google Calendar CRM MCP and Google Maps MCP via common.orchestrator.
-"""
+# Ensure /app root directory is in sys.path for common.* imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, "/app")
 
 import uuid
 from typing import Any, Dict
@@ -52,7 +53,6 @@ async def handle_whatsapp_webhook(payload: WhatsAppWebhookPayload) -> Dict[str, 
 
         session_id = f"wa_{payload.phone_number}"
 
-        # Save incoming user message
         SharedDialogueStore.add_message(
             session_id=session_id,
             sender_role="user",
@@ -61,7 +61,6 @@ async def handle_whatsapp_webhook(payload: WhatsAppWebhookPayload) -> Dict[str, 
             language=lang,
         )
 
-        # Generate REAL DYNAMIC response via Google Calendar CRM & Maps MCP
         structured_msg = await generate_dynamic_agent_response(
             user_text=user_text,
             lang=lang,
@@ -69,7 +68,6 @@ async def handle_whatsapp_webhook(payload: WhatsAppWebhookPayload) -> Dict[str, 
             trace_id=trace_id,
         )
 
-        # Save dynamic agent response
         SharedDialogueStore.add_message(
             session_id=session_id,
             sender_role="agent",
@@ -105,7 +103,6 @@ async def handle_telegram_webhook(payload: TelegramWebhookPayload) -> Dict[str, 
 
         session_id = f"tg_{chat_id}"
 
-        # Save user message
         SharedDialogueStore.add_message(
             session_id=session_id,
             sender_role="user",
@@ -114,7 +111,6 @@ async def handle_telegram_webhook(payload: TelegramWebhookPayload) -> Dict[str, 
             language=lang,
         )
 
-        # Generate REAL DYNAMIC response via Google Calendar CRM & Maps MCP
         structured_msg = await generate_dynamic_agent_response(
             user_text=user_text,
             lang=lang,
@@ -122,7 +118,6 @@ async def handle_telegram_webhook(payload: TelegramWebhookPayload) -> Dict[str, 
             trace_id=trace_id,
         )
 
-        # Save dynamic agent response
         SharedDialogueStore.add_message(
             session_id=session_id,
             sender_role="agent",

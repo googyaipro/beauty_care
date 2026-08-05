@@ -1,10 +1,9 @@
-"""Google Calendar CRM MCP Server.
+import os
+import sys
 
-Provides Model Context Protocol (MCP) tools for checking available slots,
-fetching services, creating bookings as Google Calendar events, and managing appointments.
-Uses Google Calendar API within the dedicated 'beauty-care-platform' GCP project.
-Supports TTL Slot Caching and Auto-Invalidation on new booking creation.
-"""
+# Ensure /app root directory is in sys.path for common.* imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+sys.path.insert(0, "/app")
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -67,10 +66,8 @@ async def get_available_slots(service_id: str, date: str, master_name: Optional[
         return cached_slots
 
     with trace_step("google_calendar_crm", "Query_FreeBusy_Slots"):
-        # In production, queries Google Calendar FreeBusy API (calendar.googleapis.com)
         all_slots = ["10:00", "12:30", "15:00", "17:30"]
         
-        # Filter out booked slots
         booked_times = [
             e["start"]["dateTime"].split("T")[1][:5]
             for e in _calendar_events.values()
@@ -86,7 +83,6 @@ async def get_available_slots(service_id: str, date: str, master_name: Optional[
             "calendar_provider": "google_calendar",
             "cached": False,
         }
-        # Cache slot availability for 3 minutes (180 seconds)
         cache.set(cache_key, res, ttl_seconds=180)
         return res
 
@@ -109,7 +105,6 @@ async def create_booking(booking: GoogleCalendarBookingRequest) -> Dict[str, Any
         }
         _calendar_events[booking_id] = event_data
 
-        # Auto-invalidate slot cache for this master and date
         cache_key = f"slots:{booking.service_id}:{booking.date}:{booking.master_name.lower().replace(' ', '_')}"
         cache.delete(cache_key)
 

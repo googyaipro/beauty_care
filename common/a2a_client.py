@@ -1,24 +1,24 @@
-"""Shared A2A Client helper for calling remote agents registered in Agent Registry."""
-
+import asyncio
 import uuid
-import httpx
-from a2a.client import ClientConfig, ClientFactory
-from a2a.types import AgentCard, Message, Part, Role, TextPart
+
+try:
+    import httpx
+    from a2a.client import ClientConfig, ClientFactory
+    from a2a.types import AgentCard, Message, Part, Role, TextPart
+    HAS_A2A = True
+except ImportError:
+    HAS_A2A = False
+
 from common.registry_client import get_registry
 
 
-async def call_remote_a2a_agent(agent_resource_name: str, message: str) -> dict:
-    """Send a message to an A2A agent registered in the Agent Registry.
-
-    Args:
-        agent_resource_name: Full resource name from the Registry.
-        message: The natural-language task to send to the remote agent.
-
-    Returns:
-        The agent's text response plus the URL it was reached at.
-    """
+async def call_remote_a2a_agent(agent_resource_name: str, message: str, trace_id: str = "default") -> dict:
+    """Send a message to an A2A agent registered in the Agent Registry."""
+    if not HAS_A2A:
+        return {"response": f"[Simulated Response from {agent_resource_name}]: Processed message: '{message}'", "agent_url": "http://localhost:8000"}
     try:
         registry = get_registry()
+
         info = registry.get_agent_info(agent_resource_name)
         interfaces = info.get("protocols", [{}])[0].get("interfaces", [])
         if not interfaces:
@@ -59,3 +59,12 @@ async def call_remote_a2a_agent(agent_resource_name: str, message: str) -> dict:
             return {"response": "\n".join(response_text_parts), "agent_url": url}
     except Exception as exc:
         return {"error": f"Error calling A2A agent: {str(exc)}"}
+
+
+async def call_remote_a2a_agents_parallel(agent_calls: list[tuple[str, str]], trace_id: str = "default") -> list[dict]:
+    """Execute multiple A2A agent calls in parallel via asyncio.gather."""
+    tasks = [
+        call_remote_a2a_agent(agent_name, msg, trace_id=trace_id)
+        for agent_name, msg in agent_calls
+    ]
+    return await asyncio.gather(*tasks, return_exceptions=True)

@@ -23,7 +23,6 @@ from common.dialogue_store import (
 )
 from common.rbac import Role, Permission, has_permission
 from common.rate_limiter import check_rate_limit
-from common.telemetry import trace_step, get_trace, _ACTIVE_TRACES
 from common.schemas import ActionButton, StructuredAgentMessage
 from common.orchestrator import generate_dynamic_agent_response
 
@@ -74,100 +73,98 @@ class AudioToggleRequest(BaseModel):
 
 @app.post("/v1/webhook/whatsapp")
 async def handle_whatsapp_webhook(payload: WhatsAppWebhookPayload) -> Dict[str, Any]:
-    """Receive WhatsApp webhook payload (dynamic Google Calendar CRM & Maps MCP resolution)."""
+    """Receive WhatsApp webhook payload."""
     check_rate_limit(f"wa_{payload.phone_number}")
     trace_id = str(uuid.uuid4())
 
-    with trace_step(trace_id, "WhatsApp_Webhook"):
-        user_text = payload.message_text.strip()
-        lang = detect_language(user_text)
+    user_text = payload.message_text.strip()
+    lang = detect_language(user_text)
 
-        sanitizer = PIISanitizer()
-        sanitized_text, _ = sanitizer.sanitize(user_text)
+    sanitizer = PIISanitizer()
+    sanitized_text, _ = sanitizer.sanitize(user_text)
 
-        session_id = f"wa_{payload.phone_number}"
+    session_id = f"wa_{payload.phone_number}"
 
-        SharedDialogueStore.add_message(
-            session_id=session_id,
-            sender_role="user",
-            content=user_text,
-            channel="whatsapp",
-            language=lang,
-        )
+    SharedDialogueStore.add_message(
+        session_id=session_id,
+        sender_role="user",
+        content=user_text,
+        channel="whatsapp",
+        language=lang,
+    )
 
-        structured_msg = await generate_dynamic_agent_response(
-            user_text=user_text,
-            lang=lang,
-            session_id=session_id,
-            trace_id=trace_id,
-        )
+    structured_msg = await generate_dynamic_agent_response(
+        user_text=user_text,
+        lang=lang,
+        session_id=session_id,
+        trace_id=trace_id,
+    )
 
-        SharedDialogueStore.add_message(
-            session_id=session_id,
-            sender_role="agent",
-            content=structured_msg.text_response,
-            channel="whatsapp",
-            language=lang,
-        )
+    SharedDialogueStore.add_message(
+        session_id=session_id,
+        sender_role="agent",
+        content=structured_msg.text_response,
+        channel="whatsapp",
+        language=lang,
+    )
 
-        return {
-            "status": "ok",
-            "phone_number": payload.phone_number,
-            "language_detected": lang,
-            "reply": structured_msg.text_response,
-            "buttons": [b.model_dump() for b in structured_msg.buttons],
-            "trace_id": trace_id,
-        }
+    return {
+        "status": "ok",
+        "phone_number": payload.phone_number,
+        "language_detected": lang,
+        "reply": structured_msg.text_response,
+        "buttons": [b.model_dump() for b in structured_msg.buttons],
+        "trace_id": trace_id,
+    }
 
 
 @app.post("/v1/webhook/telegram")
 async def handle_telegram_webhook(payload: TelegramWebhookPayload) -> Dict[str, Any]:
-    """Receive Telegram webhook payload (dynamic Google Calendar CRM & Maps MCP resolution)."""
+    """Receive Telegram webhook payload."""
     msg = payload.message
     chat_id = str(msg.get("chat", {}).get("id", "777"))
     check_rate_limit(f"tg_{chat_id}")
     trace_id = str(uuid.uuid4())
 
-    with trace_step(trace_id, "Telegram_Webhook"):
-        user_text = msg.get("text", "")
-        lang = detect_language(user_text)
+    user_text = msg.get("text", "")
+    lang = detect_language(user_text)
 
-        sanitizer = PIISanitizer()
-        sanitized_text, _ = sanitizer.sanitize(user_text)
+    sanitizer = PIISanitizer()
+    sanitized_text, _ = sanitizer.sanitize(user_text)
 
-        session_id = f"tg_{chat_id}"
+    session_id = f"tg_{chat_id}"
 
-        SharedDialogueStore.add_message(
-            session_id=session_id,
-            sender_role="user",
-            content=user_text,
-            channel="telegram",
-            language=lang,
-        )
+    SharedDialogueStore.add_message(
+        session_id=session_id,
+        sender_role="user",
+        content=user_text,
+        channel="telegram",
+        language=lang,
+    )
 
-        structured_msg = await generate_dynamic_agent_response(
-            user_text=user_text,
-            lang=lang,
-            session_id=session_id,
-            trace_id=trace_id,
-        )
+    structured_msg = await generate_dynamic_agent_response(
+        user_text=user_text,
+        lang=lang,
+        session_id=session_id,
+        trace_id=trace_id,
+    )
 
-        SharedDialogueStore.add_message(
-            session_id=session_id,
-            sender_role="agent",
-            content=structured_msg.text_response,
-            channel="telegram",
-            language=lang,
-        )
+    SharedDialogueStore.add_message(
+        session_id=session_id,
+        sender_role="agent",
+        content=structured_msg.text_response,
+        channel="telegram",
+        language=lang,
+    )
 
-        return {
-            "status": "ok",
-            "chat_id": chat_id,
-            "language_detected": lang,
-            "reply": structured_msg.text_response,
-            "buttons": [b.model_dump() for b in structured_msg.buttons],
-            "trace_id": trace_id,
-        }
+    return {
+        "status": "ok",
+        "chat_id": chat_id,
+        "language_detected": lang,
+        "reply": structured_msg.text_response,
+        "buttons": [b.model_dump() for b in structured_msg.buttons],
+        "trace_id": trace_id,
+    }
 
 
 @app.post("/api/v1/chat")
@@ -180,42 +177,41 @@ async def handle_live_chat(req: ChatMessageRequest) -> Dict[str, Any]:
 
     trace_id = str(uuid.uuid4())
 
-    with trace_step(trace_id, "Web_Widget_Chat"):
-        lang = detect_language(user_text)
+    lang = detect_language(user_text)
 
-        sanitizer = PIISanitizer()
-        sanitized_text, _ = sanitizer.sanitize(user_text)
+    sanitizer = PIISanitizer()
+    sanitized_text, _ = sanitizer.sanitize(user_text)
 
-        SharedDialogueStore.add_message(
-            session_id=req.session_id,
-            sender_role="user",
-            content=user_text,
-            channel="web_widget",
-            language=lang,
-        )
+    SharedDialogueStore.add_message(
+        session_id=req.session_id,
+        sender_role="user",
+        content=user_text,
+        channel="web_widget",
+        language=lang,
+    )
 
-        structured_msg = await generate_dynamic_agent_response(
-            user_text=user_text,
-            lang=lang,
-            session_id=req.session_id,
-            trace_id=trace_id,
-        )
+    structured_msg = await generate_dynamic_agent_response(
+        user_text=user_text,
+        lang=lang,
+        session_id=req.session_id,
+        trace_id=trace_id,
+    )
 
-        SharedDialogueStore.add_message(
-            session_id=req.session_id,
-            sender_role="agent",
-            content=structured_msg.text_response,
-            channel="web_widget",
-            language=lang,
-        )
+    SharedDialogueStore.add_message(
+        session_id=req.session_id,
+        sender_role="agent",
+        content=structured_msg.text_response,
+        channel="web_widget",
+        language=lang,
+    )
 
-        return {
-            "status": "success",
-            "language_detected": lang,
-            "reply": structured_msg.text_response,
-            "buttons": [b.model_dump() for b in structured_msg.buttons],
-            "trace_id": trace_id,
-        }
+    return {
+        "status": "success",
+        "language_detected": lang,
+        "reply": structured_msg.text_response,
+        "buttons": [b.model_dump() for b in structured_msg.buttons],
+        "trace_id": trace_id,
+    }
 
 
 # --- REST ADMIN API ENDPOINTS ---
@@ -224,12 +220,6 @@ async def handle_live_chat(req: ChatMessageRequest) -> Dict[str, Any]:
 async def get_realtime_dialogues(limit: int = 100) -> List[Dict[str, Any]]:
     """REST API: Get all real-time client messages across Telegram, WhatsApp, Web Widget, and curl tests."""
     return SharedDialogueStore.get_all_messages(limit=limit)
-
-
-@app.get("/api/v1/admin/telemetry")
-async def get_telemetry_traces() -> Dict[str, Any]:
-    """REST API: Get OpenTelemetry waterfall trace spans for execution profiling."""
-    return _ACTIVE_TRACES
 
 
 @app.get("/api/v1/admin/settings")
@@ -589,11 +579,10 @@ async def get_interactive_dashboard_page() -> str:
                 </div>
 
                 <div class="card">
-                    <h2>☁️ Cloud Infrastructure & Telemetry</h2>
+                    <h2>☁️ Cloud Infrastructure</h2>
                     <p style="color:var(--text-muted); font-size:0.95rem; margin-bottom:0.5rem;">GCP Dedicated Project: <code>beauty-care-platform</code></p>
                     <p style="color:var(--text-muted); font-size:0.95rem; margin-bottom:0.5rem;">Domain Namespace: <code>beauty-*.oxyjet.win</code></p>
-                    <p style="color:var(--text-muted); font-size:0.95rem; margin-bottom:0.5rem;">Cloudflare Proxy & SSL: <strong style="color:#10b981;">Active 🟧</strong></p>
-                    <p style="color:var(--text-muted); font-size:0.95rem;">OpenTelemetry Spans: <strong style="color:#06b6d4;">Active (Waterfall Tracing Enabled)</strong></p>
+                    <p style="color:var(--text-muted); font-size:0.95rem;">Cloudflare Proxy & SSL: <strong style="color:#10b981;">Active 🟧</strong></p>
                 </div>
             </div>
         </div>

@@ -13,7 +13,6 @@ import uvicorn
 
 from common.health_checker import attach_health_routes
 from common.cache import cache
-from common.telemetry import trace_step
 
 app = FastAPI(
     title="Google Calendar CRM MCP Server",
@@ -65,56 +64,54 @@ async def get_available_slots(service_id: str, date: str, master_name: Optional[
         cached_slots["cached"] = True
         return cached_slots
 
-    with trace_step("google_calendar_crm", "Query_FreeBusy_Slots"):
-        all_slots = ["10:00", "12:30", "15:00", "17:30"]
-        
-        booked_times = [
-            e["start"]["dateTime"].split("T")[1][:5]
-            for e in _calendar_events.values()
-            if e.get("status") == "confirmed" and e["start"]["dateTime"].startswith(date)
-        ]
-        available = [s for s in all_slots if s not in booked_times]
+    all_slots = ["10:00", "12:30", "15:00", "17:30"]
+    
+    booked_times = [
+        e["start"]["dateTime"].split("T")[1][:5]
+        for e in _calendar_events.values()
+        if e.get("status") == "confirmed" and e["start"]["dateTime"].startswith(date)
+    ]
+    available = [s for s in all_slots if s not in booked_times]
 
-        res = {
-            "service_id": service_id,
-            "date": date,
-            "master_name": master,
-            "available_slots": available,
-            "calendar_provider": "google_calendar",
-            "cached": False,
-        }
-        cache.set(cache_key, res, ttl_seconds=180)
-        return res
+    res = {
+        "service_id": service_id,
+        "date": date,
+        "master_name": master,
+        "available_slots": available,
+        "calendar_provider": "google_calendar",
+        "cached": False,
+    }
+    cache.set(cache_key, res, ttl_seconds=180)
+    return res
 
 
 @app.post("/mcp/tools/create_booking", status_code=status.HTTP_201_CREATED)
 async def create_booking(booking: GoogleCalendarBookingRequest) -> Dict[str, Any]:
     """MCP Tool: Insert booking event into Google Calendar and invalidate CRM slot cache."""
-    with trace_step("google_calendar_crm", "Create_Calendar_Event"):
-        booking_id = f"gcal_{int(datetime.now(timezone.utc).timestamp())}"
-        event_start = f"{booking.date}T{booking.time}:00Z"
-        
-        event_data = {
-            "event_id": booking_id,
-            "summary": f"💈 {booking.service_id} - Client: {booking.client_id}",
-            "description": f"Master: {booking.master_name}\nDeposit Paid: {booking.deposit_paid}\nLang: {booking.language}",
-            "start": {"dateTime": event_start},
-            "status": "confirmed",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "calendar_provider": "google_calendar",
-        }
-        _calendar_events[booking_id] = event_data
+    booking_id = f"gcal_{int(datetime.now(timezone.utc).timestamp())}"
+    event_start = f"{booking.date}T{booking.time}:00Z"
+    
+    event_data = {
+        "event_id": booking_id,
+        "summary": f"💈 {booking.service_id} - Client: {booking.client_id}",
+        "description": f"Master: {booking.master_name}\nDeposit Paid: {booking.deposit_paid}\nLang: {booking.language}",
+        "start": {"dateTime": event_start},
+        "status": "confirmed",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "calendar_provider": "google_calendar",
+    }
+    _calendar_events[booking_id] = event_data
 
-        cache_key = f"slots:{booking.service_id}:{booking.date}:{booking.master_name.lower().replace(' ', '_')}"
-        cache.delete(cache_key)
+    cache_key = f"slots:{booking.service_id}:{booking.date}:{booking.master_name.lower().replace(' ', '_')}"
+    cache.delete(cache_key)
 
-        return {
-            "status": "success",
-            "booking_id": booking_id,
-            "calendar_provider": "google_calendar",
-            "message": f"Appointment created in Google Calendar for {booking.date} at {booking.time}",
-            "event_details": event_data,
-        }
+    return {
+        "status": "success",
+        "booking_id": booking_id,
+        "calendar_provider": "google_calendar",
+        "message": f"Appointment created in Google Calendar for {booking.date} at {booking.time}",
+        "event_details": event_data,
+    }
 
 
 @app.post("/mcp/tools/cancel_booking")

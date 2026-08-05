@@ -16,7 +16,6 @@ from common.language_detector import detect_language
 from common.pii_sanitizer import PIISanitizer
 from common.dialogue_store import SharedDialogueStore
 from common.rate_limiter import check_rate_limit
-from common.telemetry import trace_step
 from common.orchestrator import generate_dynamic_agent_response
 
 app = FastAPI(
@@ -44,46 +43,45 @@ async def handle_whatsapp_webhook(payload: WhatsAppWebhookPayload) -> Dict[str, 
     check_rate_limit(f"wa_{payload.phone_number}")
     trace_id = str(uuid.uuid4())
 
-    with trace_step(trace_id, "WhatsApp_Webhook"):
-        user_text = payload.message_text.strip()
-        lang = detect_language(user_text)
+    user_text = payload.message_text.strip()
+    lang = detect_language(user_text)
 
-        sanitizer = PIISanitizer()
-        sanitized_text, _ = sanitizer.sanitize(user_text)
+    sanitizer = PIISanitizer()
+    sanitized_text, _ = sanitizer.sanitize(user_text)
 
-        session_id = f"wa_{payload.phone_number}"
+    session_id = f"wa_{payload.phone_number}"
 
-        SharedDialogueStore.add_message(
-            session_id=session_id,
-            sender_role="user",
-            content=user_text,
-            channel="whatsapp",
-            language=lang,
-        )
+    SharedDialogueStore.add_message(
+        session_id=session_id,
+        sender_role="user",
+        content=user_text,
+        channel="whatsapp",
+        language=lang,
+    )
 
-        structured_msg = await generate_dynamic_agent_response(
-            user_text=user_text,
-            lang=lang,
-            session_id=session_id,
-            trace_id=trace_id,
-        )
+    structured_msg = await generate_dynamic_agent_response(
+        user_text=user_text,
+        lang=lang,
+        session_id=session_id,
+        trace_id=trace_id,
+    )
 
-        SharedDialogueStore.add_message(
-            session_id=session_id,
-            sender_role="agent",
-            content=structured_msg.text_response,
-            channel="whatsapp",
-            language=lang,
-        )
+    SharedDialogueStore.add_message(
+        session_id=session_id,
+        sender_role="agent",
+        content=structured_msg.text_response,
+        channel="whatsapp",
+        language=lang,
+    )
 
-        return {
-            "status": "ok",
-            "phone_number": payload.phone_number,
-            "language_detected": lang,
-            "reply": structured_msg.text_response,
-            "buttons": [b.model_dump() for b in structured_msg.buttons],
-            "trace_id": trace_id,
-        }
+    return {
+        "status": "ok",
+        "phone_number": payload.phone_number,
+        "language_detected": lang,
+        "reply": structured_msg.text_response,
+        "buttons": [b.model_dump() for b in structured_msg.buttons],
+        "trace_id": trace_id,
+    }
 
 
 @app.post("/v1/webhook/telegram")
@@ -94,46 +92,45 @@ async def handle_telegram_webhook(payload: TelegramWebhookPayload) -> Dict[str, 
     check_rate_limit(f"tg_{chat_id}")
     trace_id = str(uuid.uuid4())
 
-    with trace_step(trace_id, "Telegram_Webhook"):
-        user_text = msg.get("text", "")
-        lang = detect_language(user_text)
+    user_text = msg.get("text", "")
+    lang = detect_language(user_text)
 
-        sanitizer = PIISanitizer()
-        sanitized_text, _ = sanitizer.sanitize(user_text)
+    sanitizer = PIISanitizer()
+    sanitized_text, _ = sanitizer.sanitize(user_text)
 
-        session_id = f"tg_{chat_id}"
+    session_id = f"tg_{chat_id}"
 
-        SharedDialogueStore.add_message(
-            session_id=session_id,
-            sender_role="user",
-            content=user_text,
-            channel="telegram",
-            language=lang,
-        )
+    SharedDialogueStore.add_message(
+        session_id=session_id,
+        sender_role="user",
+        content=user_text,
+        channel="telegram",
+        language=lang,
+    )
 
-        structured_msg = await generate_dynamic_agent_response(
-            user_text=user_text,
-            lang=lang,
-            session_id=session_id,
-            trace_id=trace_id,
-        )
+    structured_msg = await generate_dynamic_agent_response(
+        user_text=user_text,
+        lang=lang,
+        session_id=session_id,
+        trace_id=trace_id,
+    )
 
-        SharedDialogueStore.add_message(
-            session_id=session_id,
-            sender_role="agent",
-            content=structured_msg.text_response,
-            channel="telegram",
-            language=lang,
-        )
+    SharedDialogueStore.add_message(
+        session_id=session_id,
+        sender_role="agent",
+        content=structured_msg.text_response,
+        channel="telegram",
+        language=lang,
+    )
 
-        return {
-            "status": "ok",
-            "chat_id": chat_id,
-            "language_detected": lang,
-            "reply": structured_msg.text_response,
-            "buttons": [b.model_dump() for b in structured_msg.buttons],
-            "trace_id": trace_id,
-        }
+    return {
+        "status": "ok",
+        "chat_id": chat_id,
+        "language_detected": lang,
+        "reply": structured_msg.text_response,
+        "buttons": [b.model_dump() for b in structured_msg.buttons],
+        "trace_id": trace_id,
+    }
 
 
 if __name__ == "__main__":

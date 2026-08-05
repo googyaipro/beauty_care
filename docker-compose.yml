@@ -13,9 +13,6 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - ./data:/app/data
-    networks:
-      - default
-      - dokploy-network
     restart: always
 
   google_calendar_crm_mcp:
@@ -29,9 +26,6 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - ./data:/app/data
-    networks:
-      - default
-      - dokploy-network
     restart: always
 
   payment_mcp:
@@ -42,9 +36,6 @@ services:
       - "8016:8016"
     volumes:
       - ./data:/app/data
-    networks:
-      - default
-      - dokploy-network
     restart: always
 
   maps_mcp:
@@ -58,9 +49,6 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - ./data:/app/data
-    networks:
-      - default
-      - dokploy-network
     restart: always
 
   admin_cms:
@@ -75,9 +63,6 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - ./data:/app/data
-    networks:
-      - default
-      - dokploy-network
     restart: always
 
   telegram_gateway:
@@ -92,9 +77,6 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - ./data:/app/data
-    networks:
-      - default
-      - dokploy-network
     restart: always
 
   whatsapp_gateway:
@@ -109,11 +91,4 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - ./data:/app/data
-    networks:
-      - default
-      - dokploy-network
     restart: always
-
-networks:
-  dokploy-network:
-    external: true

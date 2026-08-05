@@ -48,7 +48,7 @@ services:
   admin_cms:
     build: .
     ports:
-      - "8019:8019"
+      - "8001:8001"
     environment:
       - PRODUCTION_DOMAIN=beauty-admin.oxyjet.win
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
@@ -58,7 +58,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.admin_cms.rule=Host(`beauty.oxyjet.win`) || Host(`beauty-admin.oxyjet.win`) || Host(`beauty-api.oxyjet.win`)"
       - "traefik.http.routers.admin_cms.entrypoints=web,websecure"
-      - "traefik.http.services.admin_cms.loadbalancer.server.port=8019"
+      - "traefik.http.services.admin_cms.loadbalancer.server.port=8001"
     restart: always
 
   telegram_gateway:

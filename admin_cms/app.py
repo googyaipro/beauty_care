@@ -775,4 +775,4 @@ async def get_interactive_dashboard_page() -> str:
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8019)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

@@ -1,0 +1,15 @@
+{
+  "save_audio_recordings": true,
+  "primary_language": "en",
+  "supported_languages": [
+    "en",
+    "ru",
+    "ka",
+    "de",
+    "it",
+    "es",
+    "fr"
+  ],
+  "payment_provider": "stripe",
+  "gcp_project": "beauty-care-platform"
+}

@@ -1,0 +1,68 @@
+[
+  {
+    "id": 3,
+    "session_id": "tg_998877",
+    "timestamp": "17:50:02",
+    "full_timestamp": "2026-08-05T17:50:02.382615+00:00",
+    "sender_role": "user",
+    "content": "Здравствуйте, хочу записаться на завтра!",
+    "channel": "telegram",
+    "language": "RU",
+    "audio_file": null
+  },
+  {
+    "id": 4,
+    "session_id": "tg_998877",
+    "timestamp": "17:50:02",
+    "full_timestamp": "2026-08-05T17:50:02.449674+00:00",
+    "sender_role": "agent",
+    "content": "Отлично! Я проверил расписание в Google Календаре для мастера Anna на 2026-08-07. Свободные окна: 10:00, 12:30, 15:00, 17:30. Какое время вам забронировать?",
+    "channel": "telegram",
+    "language": "RU",
+    "audio_file": null
+  },
+  {
+    "id": 7,
+    "session_id": "tg_998877",
+    "timestamp": "17:50:12",
+    "full_timestamp": "2026-08-05T17:50:12.510552+00:00",
+    "sender_role": "user",
+    "content": "Здравствуйте, хочу записаться на завтра!",
+    "channel": "telegram",
+    "language": "RU",
+    "audio_file": null
+  },
+  {
+    "id": 8,
+    "session_id": "tg_998877",
+    "timestamp": "17:50:12",
+    "full_timestamp": "2026-08-05T17:50:12.536789+00:00",
+    "sender_role": "agent",
+    "content": "Отлично! Я проверил расписание в Google Календаре для мастера Anna на 2026-08-07. Свободные окна: 10:00, 12:30, 15:00, 17:30. Какое время вам забронировать?",
+    "channel": "telegram",
+    "language": "RU",
+    "audio_file": null
+  },
+  {
+    "id": 11,
+    "session_id": "tg_998877",
+    "timestamp": "17:50:27",
+    "full_timestamp": "2026-08-05T17:50:27.496528+00:00",
+    "sender_role": "user",
+    "content": "Здравствуйте, хочу записаться на завтра!",
+    "channel": "telegram",
+    "language": "RU",
+    "audio_file": null
+  },
+  {
+    "id": 12,
+    "session_id": "tg_998877",
+    "timestamp": "17:50:27",
+    "full_timestamp": "2026-08-05T17:50:27.522472+00:00",
+    "sender_role": "agent",
+    "content": "Отлично! Я проверил расписание в Google Календаре для мастера Anna на 2026-08-07. Свободные окна: 10:00, 12:30, 15:00, 17:30. Какое время вам забронировать?",
+    "channel": "telegram",
+    "language": "RU",
+    "audio_file": null
+  }
+]

@@ -2,7 +2,7 @@
 
 The primary entry point for client interactions across WhatsApp, Telegram, VK, and Web Chat.
 Detects user intent and language, sanitizes PII, routes requests to specialized micro-agents via A2A or MCP tools.
-Model: gemini-3.5-flash-lite
+Model: gemini-3.5-flash
 """
 
 import os
@@ -11,7 +11,7 @@ from google.adk import Agent
 agent = Agent(
     name="concierge-agent",
     description="Primary Concierge & Receptionist for Beauty Care salon. Greeting, intent classification, and orchestration.",
-    model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+    model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
     instruction="""You are Concierge Receptionist for Beauty Care salon on domain oxyjet.win.
 
 Responsibilities:

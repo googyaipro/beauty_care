@@ -1,21 +1,41 @@
-"""Dynamic Multi-Agent Orchestration Engine for Beauty Care Platform.
-
-Replaces hardcoded string fallbacks with REAL dynamic HTTP calls to Google Calendar CRM MCP,
-Google Maps MCP, Payment MCP, and specialized A2A Micro-Agents.
-"""
-
-import httpx
+import asyncio
+import json
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Tuple
 
+import httpx
+
+from common.auth import LOCAL_KEY_PATH
 from common.language_detector import detect_language, get_text
 from common.schemas import ActionButton, StructuredAgentMessage
+from common.dialogue_store import SharedDialogueStore
+from common.pii_sanitizer import PIISanitizer
+from common.telemetry import trace_step
 
 # Service Endpoints
 GCAL_CRM_URL = os.environ.get("GCAL_CRM_URL", "http://localhost:8015")
 MAPS_MCP_URL = os.environ.get("MAPS_MCP_URL", "http://localhost:8014")
-REGISTRY_URL = os.environ.get("REGISTRY_URL", "http://localhost:8000")
+
+# Configure GenAI Client
+try:
+    from google import genai
+    from google.genai import types
+
+    # Force using service account key file
+    if LOCAL_KEY_PATH.exists():
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(LOCAL_KEY_PATH)
+
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "beauty-care-platform")
+    location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+    use_vertex = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "true") == "true"
+
+    genai_client = genai.Client(vertexai=use_vertex, project=project_id, location=location)
+    HAS_GENAI = True
+except Exception as e:
+    print(f"Failed to initialize Gemini Client: {e}")
+    HAS_GENAI = False
+    genai_client = None
 
 
 async def generate_dynamic_agent_response(
@@ -24,96 +44,221 @@ async def generate_dynamic_agent_response(
     session_id: str,
     trace_id: str = "default",
 ) -> StructuredAgentMessage:
-    """Dynamically route user query to CRM MCP, Maps MCP, and micro-agents to produce real dynamic responses."""
-    user_lower = user_text.lower()
-    buttons: List[ActionButton] = []
-
-    # 1. Dynamic Booking & Slot Availability Query via Google Calendar CRM MCP
-    if any(w in user_lower for w in ["окрашивание", "hair coloring", "стрижк", "haircut", "чистк", "facial", "маникюр", "manicure", "пятниц", "friday", "записаться", "book", "термин", "termin"]):
+    """Dynamically route user query to CRM MCP, Maps MCP, and generate structured output via Gemini with PII sanitization and telemetry tracing."""
+    
+    # 1. Sanitize user input (PII compliance GDPR / 152-ФЗ)
+    sanitizer = PIISanitizer()
+    sanitized_text, vault = sanitizer.sanitize(user_text)
+    user_lower = sanitized_text.lower()
+    
+    # 2. Detect multiple intents
+    call_calendar = any(w in user_lower for w in ["окрашивание", "hair coloring", "стрижк", "haircut", "чистк", "facial", "маникюр", "manicure", "пятниц", "friday", "записаться", "book", "термин", "termin"])
+    call_navigation = any(w in user_lower for w in ["доехать", "маршрут", "как добраться", "directions", "location", "address", "где вы", "где находится"])
+    
+    tasks = []
+    task_keys = []
+    
+    # 3. Add CRM calendar slots task
+    if call_calendar:
         target_date = (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")
-        service_id = "serv_102" if "окрашивание" in user_lower or "coloring" in user_lower or "färben" in user_lower else "serv_101"
-
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(
-                    f"{GCAL_CRM_URL}/mcp/tools/get_available_slots",
-                    params={"service_id": service_id, "date": target_date, "master_name": "Anna (Top Stylist)"},
+        service_id = "serv_102" if any(w in user_lower for w in ["окрашивание", "coloring", "färben"]) else "serv_101"
+        
+        async def fetch_slots():
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(
+                        f"{GCAL_CRM_URL}/mcp/tools/get_available_slots",
+                        params={"service_id": service_id, "date": target_date, "master_name": "Anna (Top Stylist)"},
+                    )
+                    if resp.status_code == 200:
+                        return resp.json()
+            except Exception:
+                pass
+            return {"available_slots": ["10:00", "12:30", "15:00", "17:30"], "master_name": "Anna", "fallback": True}
+            
+        tasks.append(fetch_slots())
+        task_keys.append("calendar")
+        
+    # 4. Add Google Maps routing task
+    if call_navigation:
+        async def fetch_route():
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.post(
+                        f"{MAPS_MCP_URL}/mcp/tools/calculate_route",
+                        json={"client_origin": "Central Station", "language": lang},
+                    )
+                    if resp.status_code == 200:
+                        return resp.json()
+            except Exception:
+                pass
+            return {"google_maps_link": "https://maps.google.com", "estimated_duration_min": 18, "distance_km": 4.2, "fallback": True}
+            
+        tasks.append(fetch_route())
+        task_keys.append("navigation")
+        
+    # 5. Execute all tasks concurrently with telemetry tracing
+    with trace_step(trace_id, "mcp_queries", {"tasks": task_keys}):
+        results = await asyncio.gather(*tasks)
+        results_map = dict(zip(task_keys, results))
+    
+    # 6. Extract Session Dialogue History and sanitize it
+    history = SharedDialogueStore.get_session_context(session_id, limit=6)
+    history_sanitized = []
+    for m in history:
+        san_hist_content, _ = sanitizer.sanitize(m["content"])
+        history_sanitized.append(f"{m['sender_role'].upper()}: {san_hist_content}")
+    history_str = "\n".join(history_sanitized)
+    
+    # 7. Call Gemini if available for structured reasoning and response formatting
+    if HAS_GENAI and genai_client:
+        with trace_step(trace_id, "llm_generation", {"model": "gemini-3.5-flash"}):
+            try:
+                # Build system instructions (explicitly tell Gemini to preserve PII tokens like [PHONE_TOKEN_...])
+                system_instruction = (
+                    "You are the AI Concierge Receptionist for Beauty Care salon (domain oxyjet.win).\n"
+                    f"You respond to the user in their preferred language (detected: {lang.upper()}).\n"
+                    "Your tone is polite, professional, warm, and welcoming.\n"
+                    "If the user query or history contains PII tokens like [PHONE_TOKEN_...] or [EMAIL_TOKEN_...], ALWAYS copy and preserve those tokens in your reply literally. Never translate or change the token name.\n"
+                    "You must strictly return a JSON object that matches the StructuredAgentMessage schema.\n"
+                    "For available slots in the calendar, you must generate interactive ActionButtons with:\n"
+                    " - label: e.g. '⏰ 10:00'\n"
+                    " - payload: 'BOOK_1000_serv_101' (time without colon, service ID)\n"
+                    "For navigation routes, add an ActionButton with:\n"
+                    " - label: '🗺️ Open Google Maps'\n"
+                    " - payload: 'MAPS_LINK:url'\n"
+                    "If both intents are present, generate buttons for both slots and maps."
                 )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    slots = data.get("available_slots", ["10:00", "12:30", "15:00", "17:30"])
-                    master = data.get("master_name", "Anna")
+                
+                prompt = (
+                    f"Dialogue History:\n{history_str}\n\n"
+                    f"Latest User Message: {sanitized_text}\n\n"
+                    f"Raw MCP context results: {json.dumps(results_map, ensure_ascii=False)}\n\n"
+                    "Generate the structured response."
+                )
+                
+                # Use gemini-3.5-flash by default (user requirement) with fallback to gemini-2.5-flash
+                primary_model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+                try:
+                    response = genai_client.models.generate_content(
+                        model=primary_model,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=StructuredAgentMessage,
+                            system_instruction=system_instruction,
+                            temperature=0.2,
+                        )
+                    )
+                except Exception as exc:
+                    err_msg = str(exc)
+                    if "NOT_FOUND" in err_msg or "was not found" in err_msg or "404" in err_msg:
+                        fallback_model = "gemini-2.5-flash"
+                        print(f"Model {primary_model} not found, falling back to {fallback_model}")
+                        response = genai_client.models.generate_content(
+                            model=fallback_model,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                response_schema=StructuredAgentMessage,
+                                system_instruction=system_instruction,
+                                temperature=0.2,
+                            )
+                        )
+                    else:
+                        raise exc
+                
+                if getattr(response, "parsed", None):
+                    parsed_data = response.parsed
+                    if isinstance(parsed_data, StructuredAgentMessage):
+                        parsed_msg = parsed_data
+                    elif isinstance(parsed_data, dict):
+                        parsed_msg = StructuredAgentMessage.model_validate(parsed_data)
+                    else:
+                        parsed_msg = StructuredAgentMessage.model_validate(json.loads(response.text))
                 else:
-                    slots = ["10:00", "12:30", "15:00", "17:30"]
-                    master = "Anna"
-        except Exception:
-            slots = ["10:00", "12:30", "15:00", "17:30"]
-            master = "Anna"
-
-        # Generate localized dynamic response text
+                    parsed_msg = StructuredAgentMessage.model_validate(json.loads(response.text))
+                    
+                parsed_msg.metadata = parsed_msg.metadata or {}
+                parsed_msg.metadata.update({"session_id": session_id, "trace_id": trace_id})
+                
+                # Restore PII tokens back to real names/phones for local channel gateway
+                parsed_msg.text_response = sanitizer.restore(parsed_msg.text_response)
+                for btn in parsed_msg.buttons:
+                    btn.label = sanitizer.restore(btn.label)
+                    btn.payload = sanitizer.restore(btn.payload)
+                
+                return parsed_msg
+                
+            except Exception as exc:
+                print(f"Gemini generation error, falling back to rule-based: {exc}")
+            
+    # 8. Core fallback (Rule-based output)
+    text_parts = []
+    buttons: List[ActionButton] = []
+    metadata = {"session_id": session_id, "trace_id": trace_id}
+    agent_id = "concierge-agent"
+    
+    if "calendar" in results_map:
+        cal_data = results_map["calendar"]
+        slots = cal_data.get("available_slots", [])
+        master = cal_data.get("master_name", "Anna")
+        target_date = (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")
+        service_id = "serv_102" if any(w in user_lower for w in ["окрашивание", "coloring", "färben"]) else "serv_101"
+        
         slots_str = ", ".join(slots)
         if lang == "ru":
-            reply_text = f"Отлично! Я проверил расписание в Google Календаре для мастера {master} на {target_date}. Свободные окна: {slots_str}. Какое время вам забронировать?"
+            cal_reply = f"Я проверил расписание в Google Календаре для мастера {master} на {target_date}. Свободные окна: {slots_str}."
         elif lang == "de":
-            reply_text = f"Ausgezeichnet! Ich habe den Google Kalender für {master} am {target_date} geprüft. Freie Termine: {slots_str}. Welche Uhrzeit möchten Sie buchen?"
+            cal_reply = f"Ich habe den Google Kalender für {master} am {target_date} geprüft. Freie Termine: {slots_str}."
         elif lang == "ka":
-            reply_text = f"შესანიშნავია! შევამოწმე Google კალენდარი ოსტატ {master}-ისთვის {target_date}-ზე. თავისუფალი დროებია: {slots_str}. რომელ დროს გირჩევნიათ?"
+            cal_reply = f"შევამოწმე Google კალენდარი ოსტატ {master}-ისთვის {target_date}-ზე. თავისუფალი დროებია: {slots_str}."
         else:
-            reply_text = f"Great! I checked the Google Calendar schedule for {master} on {target_date}. Open slots: {slots_str}. Which time would you like to book?"
-
-        # Generate dynamic action buttons
+            cal_reply = f"I checked the Google Calendar schedule for {master} on {target_date}. Open slots: {slots_str}."
+            
+        text_parts.append(cal_reply)
+        agent_id = "haircare-specialist"
+        
         for slot in slots:
             buttons.append(ActionButton(label=f"⏰ {slot}", payload=f"BOOK_{slot.replace(':', '')}_{service_id}"))
-
-        return StructuredAgentMessage(
-            text_response=reply_text,
-            agent_id="haircare-specialist",
-            buttons=buttons,
-            metadata={"service_id": service_id, "date": target_date, "master": master, "slots": slots},
-        )
-
-    # 2. Dynamic Navigation & Route Calculation via Google Maps MCP
-    elif any(w in user_lower for w in ["доехать", "маршрут", "как добраться", "directions", "location", "address", "где вы", "где находится"]):
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.post(
-                    f"{MAPS_MCP_URL}/mcp/tools/calculate_route",
-                    json={"client_origin": "Central Station", "language": lang},
-                )
-                if resp.status_code == 200:
-                    route_data = resp.json()
-                    maps_link = route_data.get("google_maps_link", "https://maps.google.com")
-                    dur = route_data.get("estimated_duration_min", 18)
-                    dist = route_data.get("distance_km", 4.2)
-                else:
-                    maps_link = "https://maps.google.com"
-                    dur = 18
-                    dist = 4.2
-        except Exception:
-            maps_link = "https://maps.google.com"
-            dur = 18
-            dist = 4.2
-
+            
+        metadata.update({"service_id": service_id, "date": target_date, "master": master, "slots": slots})
+        
+    if "navigation" in results_map:
+        nav_data = results_map["navigation"]
+        maps_link = nav_data.get("google_maps_link", "https://maps.google.com")
+        dur = nav_data.get("estimated_duration_min", 18)
+        dist = nav_data.get("distance_km", 4.2)
+        
         if lang == "ru":
-            reply_text = f"Наш салон находится по адресу: 123 Beauty Avenue, City Center. Ориентировочное время в пути: {dur} минут ({dist} км)."
+            nav_reply = f"Наш салон находится по адресу: 123 Beauty Avenue, City Center. Ориентировочное время в пути от Central Station: {dur} минут ({dist} км)."
         else:
-            reply_text = f"Our salon is located at 123 Beauty Avenue, City Center. Estimated travel time: {dur} mins ({dist} km)."
-
+            nav_reply = f"Our salon is located at 123 Beauty Avenue, City Center. Estimated travel time from Central Station: {dur} mins ({dist} km)."
+            
+        text_parts.append(nav_reply)
+        if len(results_map) == 1:
+            agent_id = "navigation-specialist"
+            
         buttons.append(ActionButton(label="🗺️ Открыть Google Maps", payload=f"MAPS_LINK:{maps_link}"))
-
-        return StructuredAgentMessage(
-            text_response=reply_text,
-            agent_id="navigation-specialist",
-            buttons=buttons,
-            metadata={"google_maps_link": maps_link, "duration_min": dur},
-        )
-
-    # 3. Default Hospitality Greeting via i18n Detector
-    else:
+        metadata.update({"google_maps_link": maps_link, "duration_min": dur, "distance_km": dist})
+        
+    if not results_map:
         greeting = get_text(lang, "welcome_message")
-        return StructuredAgentMessage(
-            text_response=greeting,
-            agent_id="concierge-agent",
-            buttons=[],
-            metadata={"session_id": session_id},
-        )
+        text_parts.append(greeting)
+        
+    combined_response = " ".join(text_parts)
+    
+    # Restore PII in fallback path as well just in case
+    combined_response = sanitizer.restore(combined_response)
+    for btn in buttons:
+        btn.label = sanitizer.restore(btn.label)
+        btn.payload = sanitizer.restore(btn.payload)
+        
+    return StructuredAgentMessage(
+        text_response=combined_response,
+        agent_id=agent_id,
+        buttons=buttons,
+        metadata=metadata,
+    )
+
+

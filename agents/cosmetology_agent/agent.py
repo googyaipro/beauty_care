@@ -1,7 +1,7 @@
 """Cosmetology & Skincare Specialist Micro-Agent.
 
 Handles questions regarding facial cleanses, peels, skincare advice, and contraindications.
-Model: gemini-3.5-flash-lite
+Model: gemini-3.5-flash
 """
 
 import os
@@ -10,7 +10,7 @@ from google.adk import Agent
 agent = Agent(
     name="cosmetology-agent",
     description="Specialist in facial skincare, cleanses, peels, and cosmetology treatments.",
-    model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+    model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
     instruction="""You are the Cosmetology & Skincare Specialist for Beauty Care salon.
 You advise clients on facial treatments, cleanses, chemical peels, and skincare.
 

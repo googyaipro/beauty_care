@@ -5,6 +5,7 @@ services:
     build: .
     ports:
       - "8000:8000"
+    command: ["python3", "registry_server/server.py"]
     environment:
       - PRODUCTION_DOMAIN=beauty-registry.oxyjet.win
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
@@ -12,13 +13,13 @@ services:
       - ./data:/app/data
     networks:
       - default
-      - dokploy-network
     restart: always
 
   google_calendar_crm_mcp:
     build: .
     ports:
       - "8015:8015"
+    command: ["python3", "mcp_servers/google_calendar_crm_mcp/server.py"]
     environment:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
@@ -31,6 +32,7 @@ services:
     build: .
     ports:
       - "8016:8016"
+    command: ["python3", "mcp_servers/payment_mcp/server.py"]
     volumes:
       - ./data:/app/data
     networks:
@@ -41,6 +43,7 @@ services:
     build: .
     ports:
       - "8014:8014"
+    command: ["python3", "mcp_servers/maps_mcp/server.py"]
     environment:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
@@ -53,6 +56,7 @@ services:
     build: .
     ports:
       - "8001:8001"
+    command: ["python3", "admin_cms/app.py"]
     environment:
       - PRODUCTION_DOMAIN=beauty-admin.oxyjet.win
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
@@ -60,13 +64,13 @@ services:
       - ./data:/app/data
     networks:
       - default
-      - dokploy-network
     restart: always
 
   telegram_gateway:
     build: .
     ports:
       - "8021:8021"
+    command: ["python3", "gateways/telegram_gateway.py"]
     environment:
       - BASE_API_URL=https://beauty-api.oxyjet.win
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
@@ -80,6 +84,7 @@ services:
     build: .
     ports:
       - "8022:8022"
+    command: ["python3", "gateways/whatsapp_gateway.py"]
     environment:
       - BASE_API_URL=https://beauty-api.oxyjet.win
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
@@ -89,6 +94,3 @@ services:
       - default
     restart: always
 
-networks:
-  dokploy-network:
-    external: true

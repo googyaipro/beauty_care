@@ -10,6 +10,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+try:
+    import redis
+    REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+    REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
+    _redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, socket_timeout=1.0)
+    _redis_client.ping()
+    HAS_REDIS = True
+except Exception:
+    HAS_REDIS = False
+    _redis_client = None
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -50,11 +61,8 @@ class SharedDialogueStore:
         language: str = "en",
         audio_file: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Record message to shared persistent store."""
-        dialogues = _read_json(DIALOGUES_FILE, [])
-        
+        """Record message to shared persistent store with Redis and JSON fallback."""
         entry = {
-            "id": len(dialogues) + 1,
             "session_id": session_id,
             "timestamp": datetime.now(timezone.utc).strftime("%H:%M:%S"),
             "full_timestamp": datetime.now(timezone.utc).isoformat(),
@@ -64,7 +72,29 @@ class SharedDialogueStore:
             "language": language.upper(),
             "audio_file": audio_file,
         }
-        
+
+        # 1. Store to Redis if available
+        if HAS_REDIS and _redis_client:
+            try:
+                # Add ID dynamically
+                entry["id"] = int(_redis_client.incr("dialogue_counter"))
+                serialized = json.dumps(entry, ensure_ascii=False)
+                
+                # Push to all dialogues list
+                _redis_client.rpush("dialogues_all", serialized)
+                
+                # Push to session-specific dialogue list
+                session_key = f"session:{session_id}:messages"
+                _redis_client.rpush(session_key, serialized)
+                _redis_client.expire(session_key, 86400)  # TTL: 24h
+                
+                return entry
+            except Exception as exc:
+                print(f"Redis write error, falling back to JSON: {exc}")
+
+        # 2. Fallback: Store to JSON
+        dialogues = _read_json(DIALOGUES_FILE, [])
+        entry["id"] = len(dialogues) + 1
         dialogues.append(entry)
         _write_json(DIALOGUES_FILE, dialogues)
         return entry
@@ -72,8 +102,31 @@ class SharedDialogueStore:
     @staticmethod
     def get_all_messages(limit: int = 100) -> List[Dict[str, Any]]:
         """Get all recorded messages across all channels."""
+        if HAS_REDIS and _redis_client:
+            try:
+                raw_msgs = _redis_client.lrange("dialogues_all", -limit, -1)
+                return [json.loads(m.decode("utf-8")) for m in raw_msgs]
+            except Exception as exc:
+                print(f"Redis read error, falling back to JSON: {exc}")
+
         dialogues = _read_json(DIALOGUES_FILE, [])
         return dialogues[-limit:]
+
+    @staticmethod
+    def get_session_context(session_id: str, limit: int = 6) -> List[Dict[str, Any]]:
+        """Retrieve recent conversation history for a given session_id for LLM context."""
+        if HAS_REDIS and _redis_client:
+            try:
+                session_key = f"session:{session_id}:messages"
+                raw_msgs = _redis_client.lrange(session_key, -limit, -1)
+                return [json.loads(m.decode("utf-8")) for m in raw_msgs]
+            except Exception as exc:
+                print(f"Redis read error, falling back to JSON: {exc}")
+
+        dialogues = _read_json(DIALOGUES_FILE, [])
+        session_msgs = [m for m in dialogues if m.get("session_id") == session_id]
+        return session_msgs[-limit:]
+
 
 
 class SharedSettingsStore:

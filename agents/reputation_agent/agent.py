@@ -2,7 +2,7 @@
 
 Gathers 1-5 star ratings post-visit. Filters 5-star reviews to Google Maps / 2GIS,
 and alerts Salon Manager for 1-3 star feedback.
-Model: gemini-3.5-flash-lite
+Model: gemini-3.5-flash
 """
 
 import os
@@ -11,7 +11,7 @@ from google.adk import Agent
 agent = Agent(
     name="reputation-agent",
     description="Collects post-visit client feedback, boosts Google Maps ratings for 5-star reviews, and routes negative feedback to salon manager.",
-    model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+    model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
     instruction="""You are the Reputation Manager for Beauty Care salon.
 
 Workflow:

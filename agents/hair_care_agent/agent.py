@@ -1,7 +1,7 @@
 """Hair Care & Styling Specialist Micro-Agent.
 
 Handles questions, consultation, and advice regarding haircuts, coloring, balayage, and hair treatments.
-Model: gemini-3.5-flash-lite
+Model: gemini-3.5-flash
 """
 
 import os
@@ -10,7 +10,7 @@ from google.adk import Agent
 agent = Agent(
     name="hair-care-agent",
     description="Specialist in haircutting, complex coloring, balayage, and hair care treatments.",
-    model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+    model=os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
     instruction="""You are the HairCare Specialist for Beauty Care salon.
 You answer client questions about haircuts, hair coloring, balayage, hair treatments, and pricing in the client's language.
 

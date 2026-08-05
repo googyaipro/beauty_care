@@ -37,3 +37,24 @@ def check_rate_limit(client_identifier: str, max_requests: int = 20, window_seco
     valid_timestamps.append(now)
     _RATE_LIMIT_STORE[client_identifier] = valid_timestamps
     return True
+
+
+class SlidingWindowRateLimiter:
+    """Sliding Window Rate Limiter for test and modular use."""
+
+    def __init__(self, requests_per_minute: int):
+        self.requests_per_minute = requests_per_minute
+        self.window_seconds = 60
+        self.store: Dict[str, list] = {}
+
+    def is_allowed(self, client_identifier: str) -> bool:
+        """Check if request from client is allowed."""
+        now = time.time()
+        timestamps = self.store.get(client_identifier, [])
+        valid_timestamps = [ts for ts in timestamps if now - ts < self.window_seconds]
+        if len(valid_timestamps) >= self.requests_per_minute:
+            return False
+        valid_timestamps.append(now)
+        self.store[client_identifier] = valid_timestamps
+        return True
+

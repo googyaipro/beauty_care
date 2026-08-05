@@ -10,6 +10,9 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
       - ./data:/app/data
+    networks:
+      - default
+      - dokploy-network
     restart: always
 
   google_calendar_crm_mcp:
@@ -20,6 +23,8 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
       - ./data:/app/data
+    networks:
+      - default
     restart: always
 
   payment_mcp:
@@ -28,6 +33,8 @@ services:
       - "8016:8016"
     volumes:
       - ./data:/app/data
+    networks:
+      - default
     restart: always
 
   maps_mcp:
@@ -38,6 +45,8 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
       - ./data:/app/data
+    networks:
+      - default
     restart: always
 
   admin_cms:
@@ -49,6 +58,9 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
       - ./data:/app/data
+    networks:
+      - default
+      - dokploy-network
     restart: always
 
   telegram_gateway:
@@ -60,6 +72,8 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
       - ./data:/app/data
+    networks:
+      - default
     restart: always
 
   whatsapp_gateway:
@@ -71,4 +85,10 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
       - ./data:/app/data
+    networks:
+      - default
     restart: always
+
+networks:
+  dokploy-network:
+    external: true

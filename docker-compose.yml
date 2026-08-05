@@ -3,7 +3,6 @@ version: '3.8'
 services:
   registry_server:
     build: .
-    container_name: beauty_registry_server
     command: python3 registry_server/server.py
     ports:
       - "8000:8000"
@@ -16,7 +15,6 @@ services:
 
   google_calendar_crm_mcp:
     build: .
-    container_name: beauty_google_calendar_crm_mcp
     command: python3 mcp_servers/google_calendar_crm_mcp/server.py
     ports:
       - "8015:8015"
@@ -28,7 +26,6 @@ services:
 
   payment_mcp:
     build: .
-    container_name: beauty_payment_mcp
     command: python3 mcp_servers/payment_mcp/server.py
     ports:
       - "8016:8016"
@@ -38,7 +35,6 @@ services:
 
   maps_mcp:
     build: .
-    container_name: beauty_maps_mcp
     command: python3 mcp_servers/maps_mcp/server.py
     ports:
       - "8014:8014"
@@ -50,7 +46,6 @@ services:
 
   admin_cms:
     build: .
-    container_name: beauty_admin_cms
     command: python3 admin_cms/app.py
     ports:
       - "8019:8019"
@@ -63,7 +58,6 @@ services:
 
   telegram_gateway:
     build: .
-    container_name: beauty_telegram_gateway
     command: python3 gateways/telegram_gateway.py
     ports:
       - "8021:8021"
@@ -76,7 +70,6 @@ services:
 
   whatsapp_gateway:
     build: .
-    container_name: beauty_whatsapp_gateway
     command: python3 gateways/whatsapp_gateway.py
     ports:
       - "8022:8022"

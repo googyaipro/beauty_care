@@ -1,10 +1,9 @@
-"""Payment MCP Server & Multi-Country Router.
+import os
+import sys
 
-Supports payment gateway adapters and digital fiscal receipts across countries:
-- Stripe (EU / US / International)
-- TBC Bank API (Georgia)
-- YooKassa 54-ФЗ (RF / CIS)
-"""
+# Ensure /app root directory is in sys.path for common.* imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+sys.path.insert(0, "/app")
 
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -45,7 +44,6 @@ async def create_payment_link(req: PaymentLinkRequest) -> Dict[str, Any]:
     payment_id = f"pay_{int(datetime.now(timezone.utc).timestamp())}"
     provider = _payment_config["provider"]
 
-    # Simulating gateway payment URL generation
     payment_url = f"https://pay.oxyjet.win/{provider}/{payment_id}"
 
     return {

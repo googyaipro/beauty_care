@@ -1,7 +1,9 @@
-"""Standalone Agent Registry Server (MCP & A2A Yellow Pages Service).
+import os
+import sys
 
-Exposes an MCP interface and HTTP endpoints for registering, searching, and managing agent cards.
-"""
+# Ensure /app root directory is in sys.path for common.* imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, "/app")
 
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, status

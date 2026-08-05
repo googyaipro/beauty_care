@@ -10,11 +10,6 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
       - ./data:/app/data
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.registry_server.rule=Host(`beauty-registry.oxyjet.win`)"
-      - "traefik.http.routers.registry_server.entrypoints=web,websecure"
-      - "traefik.http.services.registry_server.loadbalancer.server.port=8000"
     restart: always
 
   google_calendar_crm_mcp:
@@ -54,11 +49,6 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
       - ./data:/app/data
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.admin_cms.rule=Host(`beauty.oxyjet.win`) || Host(`beauty-admin.oxyjet.win`) || Host(`beauty-api.oxyjet.win`)"
-      - "traefik.http.routers.admin_cms.entrypoints=web,websecure"
-      - "traefik.http.services.admin_cms.loadbalancer.server.port=8001"
     restart: always
 
   telegram_gateway:

@@ -13,6 +13,10 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - ./data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.beauty_registry.rule=Host(`beauty-registry.oxyjet.win`)"
+      - "traefik.http.services.beauty_registry.loadbalancer.server.port=8000"
     restart: always
 
   google_calendar_crm_mcp:
@@ -63,6 +67,10 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-key.json
     volumes:
       - ./data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.beauty_main.rule=Host(`beauty.oxyjet.win`) || Host(`beauty-admin.oxyjet.win`) || Host(`beauty-api.oxyjet.win`)"
+      - "traefik.http.services.beauty_main.loadbalancer.server.port=8019"
     restart: always
 
   telegram_gateway:

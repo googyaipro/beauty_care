@@ -3,7 +3,8 @@ version: '3.8'
 services:
   registry_server:
     build: .
-    network_mode: host
+    ports:
+      - "8000:8000"
     environment:
       - PRODUCTION_DOMAIN=beauty-registry.oxyjet.win
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
@@ -13,7 +14,8 @@ services:
 
   google_calendar_crm_mcp:
     build: .
-    network_mode: host
+    ports:
+      - "8015:8015"
     environment:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
@@ -22,14 +24,16 @@ services:
 
   payment_mcp:
     build: .
-    network_mode: host
+    ports:
+      - "8016:8016"
     volumes:
       - ./data:/app/data
     restart: always
 
   maps_mcp:
     build: .
-    network_mode: host
+    ports:
+      - "8014:8014"
     environment:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
@@ -38,7 +42,8 @@ services:
 
   admin_cms:
     build: .
-    network_mode: host
+    ports:
+      - "8001:8001"
     environment:
       - PRODUCTION_DOMAIN=beauty-admin.oxyjet.win
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
@@ -48,7 +53,8 @@ services:
 
   telegram_gateway:
     build: .
-    network_mode: host
+    ports:
+      - "8021:8021"
     environment:
       - BASE_API_URL=https://beauty-api.oxyjet.win
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
@@ -58,7 +64,8 @@ services:
 
   whatsapp_gateway:
     build: .
-    network_mode: host
+    ports:
+      - "8022:8022"
     environment:
       - BASE_API_URL=https://beauty-api.oxyjet.win
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform

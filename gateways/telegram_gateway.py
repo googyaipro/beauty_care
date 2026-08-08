@@ -27,8 +27,6 @@ app = FastAPI(
 
 attach_health_routes(app, service_name="telegram_gateway")
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-
 
 class TelegramWebhookPayload(BaseModel):
     update_id: int = 1
@@ -42,15 +40,16 @@ class WhatsAppWebhookPayload(BaseModel):
 
 
 async def _send_telegram_api_message(chat_id: str, text: str, buttons: list):
-    """Send message back to user via Telegram Bot HTTP API if TOKEN is provided."""
-    if not TELEGRAM_BOT_TOKEN:
+    """Send message back to user via Telegram Bot HTTP API."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    if not token:
+        print("[Telegram Gateway] Warning: TELEGRAM_BOT_TOKEN environment variable is not set!")
         return
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": text,
-        "parse_mode": "Markdown",
     }
     if buttons:
         keyboard = []
@@ -60,9 +59,10 @@ async def _send_telegram_api_message(chat_id: str, text: str, buttons: list):
 
     try:
         async with httpx.AsyncClient() as client:
-            await client.post(url, json=payload, timeout=5.0)
+            resp = await client.post(url, json=payload, timeout=10.0)
+            print(f"[Telegram Gateway] Outbound sendMessage status: {resp.status_code}, body: {resp.text[:150]}")
     except Exception as exc:
-        print(f"Error sending Telegram message via API: {exc}")
+        print(f"[Telegram Gateway] Error sending Telegram message via API: {exc}")
 
 
 @app.post("/v1/webhook/whatsapp")
@@ -166,27 +166,14 @@ async def handle_telegram_webhook(request: Request) -> Dict[str, Any]:
         language=lang,
     )
 
-    # Dispatch directly via Telegram API if token configured
+    # Dispatch directly via Telegram API
     await _send_telegram_api_message(
         chat_id=chat_id,
         text=structured_msg.text_response,
         buttons=structured_msg.buttons,
     )
 
-    # Return standard Telegram Webhook JSON response format
-    reply_payload: Dict[str, Any] = {
-        "method": "sendMessage",
-        "chat_id": chat_id,
-        "text": structured_msg.text_response,
-    }
-    if structured_msg.buttons:
-        keyboard = [
-            [{"text": b.title, "callback_data": b.action_payload or b.title}]
-            for b in structured_msg.buttons
-        ]
-        reply_payload["reply_markup"] = {"inline_keyboard": keyboard}
-
-    return reply_payload
+    return {"status": "ok", "chat_id": chat_id}
 
 
 if __name__ == "__main__":

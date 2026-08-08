@@ -15,6 +15,9 @@ import httpx
 from common.health_checker import attach_health_routes
 from common.cache import cache
 from common.auth import get_service_account_credentials
+import google.auth
+import google.auth.transport.requests
+
 
 app = FastAPI(
     title="Google Calendar CRM MCP Server",

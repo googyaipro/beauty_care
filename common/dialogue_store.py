@@ -97,7 +97,22 @@ class SharedDialogueStore:
         entry["id"] = len(dialogues) + 1
         dialogues.append(entry)
         _write_json(DIALOGUES_FILE, dialogues)
+
+        # 3. Asynchronous Firestore Cloud Persistence Sync
+        try:
+            from google.cloud import firestore
+            from common.auth import get_service_account_credentials
+            creds = get_service_account_credentials()
+            if creds:
+                project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "beauty-care-platform")
+                db = firestore.Client(project=project_id, credentials=creds)
+                doc_ref = db.collection("salon_sessions").document(session_id).collection("messages").document()
+                doc_ref.set(entry)
+        except Exception:
+            pass
+
         return entry
+
 
     @staticmethod
     def get_all_messages(limit: int = 100) -> List[Dict[str, Any]]:

@@ -28,12 +28,6 @@ app = FastAPI(
 attach_health_routes(app, service_name="telegram_gateway")
 
 
-class TelegramWebhookPayload(BaseModel):
-    update_id: int = 1
-    message: Optional[Dict[str, Any]] = None
-    callback_query: Optional[Dict[str, Any]] = None
-
-
 class WhatsAppWebhookPayload(BaseModel):
     phone_number: str
     message_text: str
@@ -43,7 +37,7 @@ async def _send_telegram_api_message(chat_id: str, text: str, buttons: list):
     """Send message back to user via Telegram Bot HTTP API."""
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     if not token:
-        print("[Telegram Gateway] Warning: TELEGRAM_BOT_TOKEN environment variable is not set!")
+        print("[Telegram Gateway Error] TELEGRAM_BOT_TOKEN environment variable is not set!")
         return
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -57,12 +51,13 @@ async def _send_telegram_api_message(chat_id: str, text: str, buttons: list):
             keyboard.append([{"text": btn.title, "callback_data": btn.action_payload or btn.title}])
         payload["reply_markup"] = {"inline_keyboard": keyboard}
 
+    print(f"[Telegram Outbound] Sending to chat_id={chat_id} using token={token[:10]}...")
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(url, json=payload, timeout=10.0)
-            print(f"[Telegram Gateway] Outbound sendMessage status: {resp.status_code}, body: {resp.text[:150]}")
+            print(f"[Telegram Outbound Result] Status: {resp.status_code}, Body: {resp.text}")
     except Exception as exc:
-        print(f"[Telegram Gateway] Error sending Telegram message via API: {exc}")
+        print(f"[Telegram Outbound Exception] Error sending message to chat {chat_id}: {exc}")
 
 
 @app.post("/v1/webhook/whatsapp")
@@ -117,25 +112,32 @@ async def handle_telegram_webhook(request: Request) -> Dict[str, Any]:
     """Receive Telegram webhook payload with dynamic CRM & Maps MCP resolution."""
     try:
         body = await request.json()
-    except Exception:
-        body = {}
+    except Exception as exc:
+        print(f"[Telegram Webhook Error] Invalid JSON payload: {exc}")
+        return {"status": "error", "reason": "invalid_json"}
+
+    print(f"[Telegram Webhook Incoming] Payload: {body}")
 
     msg = body.get("message") or body.get("edited_message") or {}
     callback_query = body.get("callback_query")
 
     if callback_query:
-        chat_id = str(callback_query.get("from", {}).get("id", "777"))
+        chat_id = str(callback_query.get("message", {}).get("chat", {}).get("id") or callback_query.get("from", {}).get("id", ""))
         user_text = callback_query.get("data", "")
     else:
-        chat_id = str(msg.get("chat", {}).get("id", "777"))
+        chat_id = str(msg.get("chat", {}).get("id", ""))
         user_text = msg.get("text", "")
 
-    if not user_text:
-        return {"status": "ignored", "reason": "empty_message"}
+    if not chat_id or not user_text:
+        print(f"[Telegram Webhook Ignored] missing chat_id ({chat_id}) or text ({user_text})")
+        return {"status": "ignored", "reason": "missing_chat_id_or_text"}
 
-    check_rate_limit(f"tg_{chat_id}")
+    try:
+        check_rate_limit(f"tg_{chat_id}")
+    except Exception as exc:
+        print(f"[Telegram Rate Limit Warning] {exc}")
+
     trace_id = str(uuid.uuid4())
-
     lang = detect_language(user_text)
 
     sanitizer = PIISanitizer()
@@ -151,12 +153,22 @@ async def handle_telegram_webhook(request: Request) -> Dict[str, Any]:
         language=lang,
     )
 
-    structured_msg = await generate_dynamic_agent_response(
-        user_text=user_text,
-        lang=lang,
-        session_id=session_id,
-        trace_id=trace_id,
-    )
+    try:
+        structured_msg = await generate_dynamic_agent_response(
+            user_text=user_text,
+            lang=lang,
+            session_id=session_id,
+            trace_id=trace_id,
+        )
+    except Exception as exc:
+        print(f"[Telegram Orchestrator Error] {exc}")
+        # Send emergency fallback response to user
+        await _send_telegram_api_message(
+            chat_id=chat_id,
+            text="🌸 Извините, произошел временный сбой. Напишите нам еще раз!",
+            buttons=[],
+        )
+        return {"status": "error", "detail": str(exc)}
 
     SharedDialogueStore.add_message(
         session_id=session_id,

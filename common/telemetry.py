@@ -1,4 +1,5 @@
 import time
+import json
 from contextlib import contextmanager
 
 _ACTIVE_TRACES = {}
@@ -7,6 +8,7 @@ _ACTIVE_TRACES = {}
 def trace_step(trace_id: str, step_name: str, metadata=None):
     start_time = time.time()
     span = {
+        "trace_id": trace_id,
         "step_name": step_name,
         "status": "OK",
         "metadata": metadata or {},
@@ -19,7 +21,8 @@ def trace_step(trace_id: str, step_name: str, metadata=None):
         raise
     finally:
         end_time = time.time()
-        span["duration_ms"] = int((end_time - start_time) * 1000)
+        span["duration_ms"] = round((end_time - start_time) * 1000, 2)
+        print(f"[Telemetry Span] {json.dumps(span, ensure_ascii=False)}")
         if trace_id not in _ACTIVE_TRACES:
             _ACTIVE_TRACES[trace_id] = []
         _ACTIVE_TRACES[trace_id].append(span)
@@ -29,4 +32,5 @@ def get_trace(trace_id: str):
 
 def clear_trace(trace_id: str):
     _ACTIVE_TRACES[trace_id] = []
+
 

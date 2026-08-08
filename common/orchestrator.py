@@ -207,36 +207,57 @@ async def generate_dynamic_agent_response(
 
                 primary_model = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 
+                async def _execute_with_backoff(coro_func, max_retries=3, initial_delay=0.5):
+                    delay = initial_delay
+                    last_exc = None
+                    for attempt in range(max_retries):
+                        try:
+                            return await coro_func()
+                        except Exception as exc:
+                            last_exc = exc
+                            err_str = str(exc).lower()
+                            if any(term in err_str for term in ["429", "503", "resource_exhausted", "unavailable", "rate limit"]):
+                                print(f"[Vertex AI Retry] Attempt {attempt + 1}/{max_retries} failed with {exc}. Retrying in {delay}s...")
+                                await asyncio.sleep(delay)
+                                delay *= 2.0
+                            else:
+                                raise exc
+                    raise last_exc
+
                 async def run_adk_agent(model_name: str) -> str:
-                    agent = adk.Agent(
-                        name="concierge_agent",
-                        model=model_name,
-                        instruction=system_instruction,
-                        output_schema=StructuredAgentMessage,
-                        generate_content_config={
-                            "response_mime_type": "application/json",
-                            "temperature": 0.2
-                        }
-                    )
-                    session_service = InMemorySessionService()
-                    runner = Runner(agent=agent, app_name="beauty_care", session_service=session_service, auto_create_session=True)
+                    async def _inner_call():
+                        agent = adk.Agent(
+                            name="concierge_agent",
+                            model=model_name,
+                            instruction=system_instruction,
+                            output_schema=StructuredAgentMessage,
+                            generate_content_config={
+                                "response_mime_type": "application/json",
+                                "temperature": 0.2
+                            }
+                        )
+                        session_service = InMemorySessionService()
+                        runner = Runner(agent=agent, app_name="beauty_care", session_service=session_service, auto_create_session=True)
 
-                    content = types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
-                    events = runner.run_async(
-                        session_id=session_id,
-                        user_id="user_1",
-                        new_message=content
-                    )
+                        content = types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
+                        events = runner.run_async(
+                            session_id=session_id,
+                            user_id="user_1",
+                            new_message=content
+                        )
 
-                    response_text = ""
-                    async for event in events:
-                        if hasattr(event, "content") and event.content:
-                            if event.content.parts and event.content.parts[0].text:
-                                response_text = event.content.parts[0].text
-                    return response_text
+                        response_text = ""
+                        async for event in events:
+                            if hasattr(event, "content") and event.content:
+                                if event.content.parts and event.content.parts[0].text:
+                                    response_text = event.content.parts[0].text
+                        return response_text
+
+                    return await _execute_with_backoff(_inner_call, max_retries=3, initial_delay=0.5)
 
                 try:
                     raw_response = await run_adk_agent(primary_model)
+
                 except Exception as exc:
                     err_msg = str(exc)
                     if "NOT_FOUND" in err_msg or "was not found" in err_msg or "404" in err_msg:

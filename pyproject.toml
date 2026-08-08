@@ -9,7 +9,9 @@ dependencies = [
     "fastapi>=0.115.0",
     "google-adk>=2.0.0",
     "google-auth>=2.30.0",
+    "google-cloud-firestore>=2.15.0",
     "httpx>=0.28.0",
+
     "mcp>=1.0.0",
     "pydantic>=2.10.0",
     "pytest>=8.0.0",

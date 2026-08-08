@@ -6,11 +6,14 @@ so that Admin CMS Chat Inspector displays all real-time client interactions acro
 
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+
 try:
+
     import redis
     REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
     REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
@@ -50,6 +53,21 @@ def _write_json(file_path: Path, data: Any) -> None:
         print(f"Error writing file {file_path}: {exc}")
 
 
+def _sync_to_firestore(session_id: str, entry: Dict[str, Any]) -> None:
+    """Asynchronously sync message entry to Google Cloud Firestore if credentials permit."""
+    try:
+        from google.cloud import firestore
+        from common.auth import get_service_account_credentials
+        creds = get_service_account_credentials()
+        if creds:
+            project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "beauty-care-platform")
+            db = firestore.Client(project=project_id, credentials=creds)
+            doc_ref = db.collection("salon_sessions").document(session_id).collection("messages").document()
+            doc_ref.set(entry)
+    except Exception as exc:
+        print(f"[Firestore Sync Warning] {exc}")
+
+
 class SharedDialogueStore:
 
     @staticmethod
@@ -61,7 +79,7 @@ class SharedDialogueStore:
         language: str = "en",
         audio_file: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Record message to shared persistent store with Redis and JSON fallback."""
+        """Record message to shared persistent store with Redis, JSON, and Cloud Firestore sync."""
         entry = {
             "session_id": session_id,
             "timestamp": datetime.now(timezone.utc).strftime("%H:%M:%S"),
@@ -76,18 +94,16 @@ class SharedDialogueStore:
         # 1. Store to Redis if available
         if HAS_REDIS and _redis_client:
             try:
-                # Add ID dynamically
                 entry["id"] = int(_redis_client.incr("dialogue_counter"))
                 serialized = json.dumps(entry, ensure_ascii=False)
                 
-                # Push to all dialogues list
                 _redis_client.rpush("dialogues_all", serialized)
                 
-                # Push to session-specific dialogue list
                 session_key = f"session:{session_id}:messages"
                 _redis_client.rpush(session_key, serialized)
-                _redis_client.expire(session_key, 86400)  # TTL: 24h
+                _redis_client.expire(session_key, 86400)
                 
+                _sync_to_firestore(session_id, entry)
                 return entry
             except Exception as exc:
                 print(f"Redis write error, falling back to JSON: {exc}")
@@ -99,20 +115,9 @@ class SharedDialogueStore:
         _write_json(DIALOGUES_FILE, dialogues)
 
         # 3. Asynchronous Firestore Cloud Persistence Sync
-        try:
-            from google.cloud import firestore
-            from common.auth import get_service_account_credentials
-            creds = get_service_account_credentials()
-            if creds:
-                project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "beauty-care-platform")
-                db = firestore.Client(project=project_id, credentials=creds)
-                doc_ref = db.collection("salon_sessions").document(session_id).collection("messages").document()
-                doc_ref.set(entry)
-        except Exception:
-            pass
+        _sync_to_firestore(session_id, entry)
 
         return entry
-
 
     @staticmethod
     def get_all_messages(limit: int = 100) -> List[Dict[str, Any]]:
@@ -141,7 +146,6 @@ class SharedDialogueStore:
         dialogues = _read_json(DIALOGUES_FILE, [])
         session_msgs = [m for m in dialogues if m.get("session_id") == session_id]
         return session_msgs[-limit:]
-
 
 
 class SharedSettingsStore:

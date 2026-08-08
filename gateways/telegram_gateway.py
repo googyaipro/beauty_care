@@ -6,8 +6,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, "/app")
 
 import uuid
-from typing import Any, Dict
-from fastapi import FastAPI
+import httpx
+from typing import Any, Dict, Optional
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 import uvicorn
 
@@ -26,15 +27,42 @@ app = FastAPI(
 
 attach_health_routes(app, service_name="telegram_gateway")
 
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+
 
 class TelegramWebhookPayload(BaseModel):
     update_id: int = 1
-    message: Dict[str, Any]
+    message: Optional[Dict[str, Any]] = None
+    callback_query: Optional[Dict[str, Any]] = None
 
 
 class WhatsAppWebhookPayload(BaseModel):
     phone_number: str
     message_text: str
+
+
+async def _send_telegram_api_message(chat_id: str, text: str, buttons: list):
+    """Send message back to user via Telegram Bot HTTP API if TOKEN is provided."""
+    if not TELEGRAM_BOT_TOKEN:
+        return
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown",
+    }
+    if buttons:
+        keyboard = []
+        for btn in buttons:
+            keyboard.append([{"text": btn.title, "callback_data": btn.action_payload or btn.title}])
+        payload["reply_markup"] = {"inline_keyboard": keyboard}
+
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(url, json=payload, timeout=5.0)
+    except Exception as exc:
+        print(f"Error sending Telegram message via API: {exc}")
 
 
 @app.post("/v1/webhook/whatsapp")
@@ -85,14 +113,29 @@ async def handle_whatsapp_webhook(payload: WhatsAppWebhookPayload) -> Dict[str, 
 
 
 @app.post("/v1/webhook/telegram")
-async def handle_telegram_webhook(payload: TelegramWebhookPayload) -> Dict[str, Any]:
+async def handle_telegram_webhook(request: Request) -> Dict[str, Any]:
     """Receive Telegram webhook payload with dynamic CRM & Maps MCP resolution."""
-    msg = payload.message
-    chat_id = str(msg.get("chat", {}).get("id", "777"))
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    msg = body.get("message") or body.get("edited_message") or {}
+    callback_query = body.get("callback_query")
+
+    if callback_query:
+        chat_id = str(callback_query.get("from", {}).get("id", "777"))
+        user_text = callback_query.get("data", "")
+    else:
+        chat_id = str(msg.get("chat", {}).get("id", "777"))
+        user_text = msg.get("text", "")
+
+    if not user_text:
+        return {"status": "ignored", "reason": "empty_message"}
+
     check_rate_limit(f"tg_{chat_id}")
     trace_id = str(uuid.uuid4())
 
-    user_text = msg.get("text", "")
     lang = detect_language(user_text)
 
     sanitizer = PIISanitizer()
@@ -123,14 +166,27 @@ async def handle_telegram_webhook(payload: TelegramWebhookPayload) -> Dict[str, 
         language=lang,
     )
 
-    return {
-        "status": "ok",
+    # Dispatch directly via Telegram API if token configured
+    await _send_telegram_api_message(
+        chat_id=chat_id,
+        text=structured_msg.text_response,
+        buttons=structured_msg.buttons,
+    )
+
+    # Return standard Telegram Webhook JSON response format
+    reply_payload: Dict[str, Any] = {
+        "method": "sendMessage",
         "chat_id": chat_id,
-        "language_detected": lang,
-        "reply": structured_msg.text_response,
-        "buttons": [b.model_dump() for b in structured_msg.buttons],
-        "trace_id": trace_id,
+        "text": structured_msg.text_response,
     }
+    if structured_msg.buttons:
+        keyboard = [
+            [{"text": b.title, "callback_data": b.action_payload or b.title}]
+            for b in structured_msg.buttons
+        ]
+        reply_payload["reply_markup"] = {"inline_keyboard": keyboard}
+
+    return reply_payload
 
 
 if __name__ == "__main__":

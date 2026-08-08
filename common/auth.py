@@ -21,6 +21,16 @@ except ImportError:
 
 KEY_PATH = Path("/app/service-account-key.json")
 LOCAL_KEY_PATH = Path(__file__).resolve().parent.parent / "service-account-key.json"
+TMP_KEY_PATH = Path("/tmp/service-account-key.json")
+
+# Auto-dump SERVICE_ACCOUNT_KEY_JSON to /tmp/service-account-key.json so Google ADK / GenAI SDK ADC works out-of-the-box
+json_env = os.environ.get("SERVICE_ACCOUNT_KEY_JSON")
+if json_env and json_env.strip().startswith("{"):
+    try:
+        TMP_KEY_PATH.write_text(json_env.strip(), encoding="utf-8")
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(TMP_KEY_PATH)
+    except Exception as exc:
+        print(f"Error writing /tmp/service-account-key.json: {exc}")
 
 
 def get_service_account_credentials():
@@ -33,18 +43,20 @@ def get_service_account_credentials():
         "https://www.googleapis.com/auth/calendar",
     ]
 
-    # Option 1: Direct JSON string in Environment Variable (e.g. pasted in Dokploy UI)
-    json_env = os.environ.get("SERVICE_ACCOUNT_KEY_JSON")
-    if json_env and json_env.strip().startswith("{"):
+    # Option 1: Direct JSON string in Environment Variable
+    json_str = os.environ.get("SERVICE_ACCOUNT_KEY_JSON")
+    if json_str and json_str.strip().startswith("{"):
         try:
-            info = json.loads(json_env)
+            info = json.loads(json_str)
             return service_account.Credentials.from_service_account_info(info, scopes=scopes)
         except Exception as exc:
             print(f"Error parsing SERVICE_ACCOUNT_KEY_JSON: {exc}")
 
     # Option 2: File path on disk
     key_file = None
-    if KEY_PATH.exists():
+    if TMP_KEY_PATH.exists():
+        key_file = str(TMP_KEY_PATH)
+    elif KEY_PATH.exists():
         key_file = str(KEY_PATH)
     elif LOCAL_KEY_PATH.exists():
         key_file = str(LOCAL_KEY_PATH)
@@ -61,7 +73,7 @@ def get_service_account_credentials():
 
     # Option 3: Standard GCP ADC Fallback (fail-safe)
     try:
-        credentials, _ = google.auth.default()
+        credentials, _ = google.auth.default(scopes=scopes)
         return credentials
     except Exception as exc:
         print(f"GCP ADC fallback unavailable: {exc}")

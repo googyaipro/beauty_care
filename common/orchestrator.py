@@ -25,17 +25,17 @@ try:
     from google.adk.sessions import InMemorySessionService
     from google.adk.runners import Runner
 
-    # Force using service account key file
-    if LOCAL_KEY_PATH.exists():
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(LOCAL_KEY_PATH)
+    from common.auth import get_service_account_credentials
+    credentials = get_service_account_credentials()
 
     project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "beauty-care-platform")
     location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
     use_vertex = os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "true") == "true"
 
-    genai_client = genai.Client(vertexai=use_vertex, project=project_id, location=location)
+    genai_client = genai.Client(vertexai=use_vertex, project=project_id, location=location, credentials=credentials)
     HAS_GENAI = True
     HAS_ADK = True
+
 except Exception as e:
     print(f"Failed to initialize Gemini Client or ADK: {e}")
     HAS_GENAI = False

@@ -17,6 +17,7 @@ from common.language_detector import detect_language
 from common.pii_sanitizer import PIISanitizer
 from common.dialogue_store import SharedDialogueStore
 from common.rate_limiter import check_rate_limit
+from common.auth import get_gcp_secret
 from common.orchestrator import generate_dynamic_agent_response
 
 app = FastAPI(
@@ -35,7 +36,8 @@ class WhatsAppWebhookPayload(BaseModel):
 
 async def _send_telegram_api_message(chat_id: str, text: str, buttons: list):
     """Send message back to user via Telegram Bot HTTP API."""
-    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    token = get_gcp_secret("TELEGRAM_BOT_TOKEN").strip()
+
     if not token:
         print("[Telegram Gateway Error] TELEGRAM_BOT_TOKEN environment variable is not set!")
         return

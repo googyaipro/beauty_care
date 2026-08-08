@@ -12,6 +12,8 @@ import uvicorn
 
 from common.health_checker import attach_health_routes
 from common.cache import cache
+from common.auth import get_gcp_secret
+
 
 app = FastAPI(
     title="Google Maps MCP Server",

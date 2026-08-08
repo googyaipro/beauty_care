@@ -102,6 +102,26 @@ def get_dynamic_headers(context=None) -> Dict[str, str]:
     return {"Content-Type": "application/json"}
 
 
+def get_gcp_secret(secret_id: str, default: str = "") -> str:
+    """Fetch secret value from environment variable OR GCP Secret Manager."""
+    val = os.environ.get(secret_id)
+    if val and val.strip():
+        return val.strip()
+
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT", "beauty-care-platform")
+    try:
+        from google.cloud import secretmanager
+        creds = get_service_account_credentials()
+        client = secretmanager.SecretManagerServiceClient(credentials=creds)
+        name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
+        response = client.access_secret_version(request={"name": name})
+        return response.payload.data.decode("UTF-8").strip()
+    except Exception:
+        pass
+
+    return default
+
+
 A2A_SECRET_TOKEN = os.environ.get("A2A_SECRET_TOKEN", "beauty-care-a2a-secret-2026")
 
 
@@ -111,3 +131,4 @@ def verify_a2a_bearer_token(auth_header: str) -> bool:
         return False
     token = auth_header.split(" ", 1)[1].strip()
     return token == A2A_SECRET_TOKEN
+

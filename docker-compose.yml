@@ -7,8 +7,13 @@ services:
       - "8000:8000"
     command: ["python3", "registry_server/server.py"]
     environment:
-      - PRODUCTION_DOMAIN=beauty-registry.oxyjet.win
-      - GOOGLE_CLOUD_PROJECT=beauty-care-platform
+      - PRODUCTION_DOMAIN=${PRODUCTION_DOMAIN:-beauty-registry.oxyjet.win}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-beauty-care-platform}
+      - GOOGLE_GENAI_USE_VERTEXAI=${GOOGLE_GENAI_USE_VERTEXAI:-true}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash}
+      - SERVICE_ACCOUNT_KEY_JSON=${SERVICE_ACCOUNT_KEY_JSON}
+      - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY}
+      - A2A_SECRET_TOKEN=${A2A_SECRET_TOKEN}
     volumes:
       - ./data:/app/data
     labels:
@@ -27,7 +32,9 @@ services:
       - "8015:8015"
     command: ["python3", "mcp_servers/google_calendar_crm_mcp/server.py"]
     environment:
-      - GOOGLE_CLOUD_PROJECT=beauty-care-platform
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-beauty-care-platform}
+      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID}
+      - SERVICE_ACCOUNT_KEY_JSON=${SERVICE_ACCOUNT_KEY_JSON}
     volumes:
       - ./data:/app/data
     networks:
@@ -53,7 +60,9 @@ services:
       - "8014:8014"
     command: ["python3", "mcp_servers/maps_mcp/server.py"]
     environment:
-      - GOOGLE_CLOUD_PROJECT=beauty-care-platform
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-beauty-care-platform}
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      - SERVICE_ACCOUNT_KEY_JSON=${SERVICE_ACCOUNT_KEY_JSON}
     volumes:
       - ./data:/app/data
     networks:
@@ -67,8 +76,15 @@ services:
       - "8001:8001"
     command: ["python3", "admin_cms/app.py"]
     environment:
-      - PRODUCTION_DOMAIN=beauty-admin.oxyjet.win
-      - GOOGLE_CLOUD_PROJECT=beauty-care-platform
+      - PRODUCTION_DOMAIN=${PRODUCTION_DOMAIN:-beauty-admin.oxyjet.win}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-beauty-care-platform}
+      - GOOGLE_GENAI_USE_VERTEXAI=${GOOGLE_GENAI_USE_VERTEXAI:-true}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash}
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID}
+      - SERVICE_ACCOUNT_KEY_JSON=${SERVICE_ACCOUNT_KEY_JSON}
+      - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY}
+      - A2A_SECRET_TOKEN=${A2A_SECRET_TOKEN}
     volumes:
       - ./data:/app/data
     labels:
@@ -87,8 +103,16 @@ services:
       - "8021:8021"
     command: ["python3", "gateways/telegram_gateway.py"]
     environment:
-      - BASE_API_URL=https://beauty-api.oxyjet.win
-      - GOOGLE_CLOUD_PROJECT=beauty-care-platform
+      - BASE_API_URL=${BASE_API_URL:-https://beauty-api.oxyjet.win}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-beauty-care-platform}
+      - GOOGLE_GENAI_USE_VERTEXAI=${GOOGLE_GENAI_USE_VERTEXAI:-true}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash}
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      - GOOGLE_CALENDAR_ID=${GOOGLE_CALENDAR_ID}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - SERVICE_ACCOUNT_KEY_JSON=${SERVICE_ACCOUNT_KEY_JSON}
+      - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY}
+      - A2A_SECRET_TOKEN=${A2A_SECRET_TOKEN}
     volumes:
       - ./data:/app/data
     labels:
@@ -107,8 +131,13 @@ services:
       - "8022:8022"
     command: ["python3", "gateways/whatsapp_gateway.py"]
     environment:
-      - BASE_API_URL=https://beauty-api.oxyjet.win
-      - GOOGLE_CLOUD_PROJECT=beauty-care-platform
+      - BASE_API_URL=${BASE_API_URL:-https://beauty-api.oxyjet.win}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-beauty-care-platform}
+      - GOOGLE_GENAI_USE_VERTEXAI=${GOOGLE_GENAI_USE_VERTEXAI:-true}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash}
+      - SERVICE_ACCOUNT_KEY_JSON=${SERVICE_ACCOUNT_KEY_JSON}
+      - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY}
+      - A2A_SECRET_TOKEN=${A2A_SECRET_TOKEN}
     volumes:
       - ./data:/app/data
     networks:

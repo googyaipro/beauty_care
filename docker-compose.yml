@@ -11,7 +11,13 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
       - ./data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.beauty-registry.rule=Host(`beauty-registry.oxyjet.win`)"
+      - "traefik.http.routers.beauty-registry.entrypoints=web,websecure"
+      - "traefik.http.services.beauty-registry.loadbalancer.server.port=8000"
     networks:
+      - dokploy-network
       - default
     restart: always
 
@@ -25,6 +31,7 @@ services:
     volumes:
       - ./data:/app/data
     networks:
+      - dokploy-network
       - default
     restart: always
 
@@ -36,6 +43,7 @@ services:
     volumes:
       - ./data:/app/data
     networks:
+      - dokploy-network
       - default
     restart: always
 
@@ -49,6 +57,7 @@ services:
     volumes:
       - ./data:/app/data
     networks:
+      - dokploy-network
       - default
     restart: always
 
@@ -62,7 +71,13 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
       - ./data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.beauty-admin.rule=Host(`beauty-admin.oxyjet.win`) || Host(`beauty.oxyjet.win`)"
+      - "traefik.http.routers.beauty-admin.entrypoints=web,websecure"
+      - "traefik.http.services.beauty-admin.loadbalancer.server.port=8001"
     networks:
+      - dokploy-network
       - default
     restart: always
 
@@ -76,7 +91,13 @@ services:
       - GOOGLE_CLOUD_PROJECT=beauty-care-platform
     volumes:
       - ./data:/app/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.beauty-api.rule=Host(`beauty-api.oxyjet.win`)"
+      - "traefik.http.routers.beauty-api.entrypoints=web,websecure"
+      - "traefik.http.services.beauty-api.loadbalancer.server.port=8021"
     networks:
+      - dokploy-network
       - default
     restart: always
 
@@ -91,6 +112,12 @@ services:
     volumes:
       - ./data:/app/data
     networks:
+      - dokploy-network
       - default
     restart: always
 
+networks:
+  dokploy-network:
+    external: true
+    name: dokploy-network
+  default:

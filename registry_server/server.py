@@ -20,9 +20,6 @@ app = FastAPI(
 
 attach_health_routes(app, service_name="beauty_care_agent_registry")
 
-# In-memory storage for registered Agent Cards
-_registered_agents: Dict[str, Dict[str, Any]] = {}
-
 
 class AgentInterface(BaseModel):
     url: str
@@ -42,6 +39,67 @@ class AgentRegistration(BaseModel):
     version: str = "1.0.0"
     interfaces: List[AgentInterface]
     skills: List[AgentSkill]
+
+
+# Default built-in Agents in the Beauty Care Mesh
+_default_agents = {
+    "concierge-agent": {
+        "agent_id": "concierge-agent",
+        "name": "Concierge Receptionist Agent",
+        "description": "Первичный ИИ-администратор салона, приветствие и диспетчеризация запросов клиентов",
+        "version": "1.0.0",
+        "interfaces": [{"url": "https://beauty-api.oxyjet.win/v1/webhook/telegram", "protocol": "A2A"}],
+        "skills": [{"id": "greeting", "description": "Приветствие и маршрутизация", "tags": ["reception", "routing", "general"]}],
+    },
+    "haircare-specialist": {
+        "agent_id": "haircare-specialist",
+        "name": "Haircare & Coloring Specialist Agent",
+        "description": "Эксперт по уходу за волосами, стрижкам и сложному окрашиванию",
+        "version": "1.0.0",
+        "interfaces": [{"url": "https://beauty-api.oxyjet.win/v1/webhook/telegram", "protocol": "A2A"}],
+        "skills": [{"id": "hair_coloring", "description": "Стрижка и окрашивание волос", "tags": ["hair", "coloring", "haircut"]}],
+    },
+    "cosmetology-specialist": {
+        "agent_id": "cosmetology-specialist",
+        "name": "Cosmetology & Facial Care Specialist Agent",
+        "description": "Эксперт по уходу за кожей лица, чистке и пилингу",
+        "version": "1.0.0",
+        "interfaces": [{"url": "https://beauty-api.oxyjet.win/v1/webhook/telegram", "protocol": "A2A"}],
+        "skills": [{"id": "facial_care", "description": "Чистка лица и пилинг", "tags": ["cosmetology", "facial", "skin"]}],
+    },
+    "nailstyle-specialist": {
+        "agent_id": "nailstyle-specialist",
+        "name": "Nail Style Specialist Agent",
+        "description": "Мастер ногтевого сервиса, маникюр и педикюр",
+        "version": "1.0.0",
+        "interfaces": [{"url": "https://beauty-api.oxyjet.win/v1/webhook/telegram", "protocol": "A2A"}],
+        "skills": [{"id": "manicure", "description": "Маникюр с покрытием", "tags": ["nails", "manicure"]}],
+    },
+    "navigation-specialist": {
+        "agent_id": "navigation-specialist",
+        "name": "Google Maps Navigation Agent",
+        "description": "Расчет оптимального маршрута и времени в пути до салона через Google Maps API",
+        "version": "1.0.0",
+        "interfaces": [{"url": "https://beauty-api.oxyjet.win/mcp/tools/calculate_route", "protocol": "MCP"}],
+        "skills": [{"id": "route_calculation", "description": "Расчет маршрута Google Maps", "tags": ["maps", "navigation", "route"]}],
+    },
+    "booking-crm-specialist": {
+        "agent_id": "booking-crm-specialist",
+        "name": "Google Calendar CRM Agent",
+        "description": "Поиск свободных окон и автоматическая запись клиентов в Google Календарь",
+        "version": "1.0.0",
+        "interfaces": [{"url": "https://beauty-api.oxyjet.win/mcp/tools/create_booking", "protocol": "MCP"}],
+        "skills": [{"id": "calendar_booking", "description": "Запись в Google Календарь", "tags": ["calendar", "crm", "booking"]}],
+    },
+}
+
+_registered_agents: Dict[str, Dict[str, Any]] = dict(_default_agents)
+
+
+@app.get("/api/v1/agents", summary="List all registered agent IDs and cards")
+async def list_agents() -> List[Dict[str, Any]]:
+    """Get complete list of all registered agents in the Beauty Care platform."""
+    return list(_registered_agents.values())
 
 
 @app.post("/api/v1/agents/register", status_code=status.HTTP_201_CREATED)

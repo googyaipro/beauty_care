@@ -41,20 +41,28 @@ async def _send_telegram_api_message(chat_id: str, text: str, buttons: list):
         return
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
+    payload_data: Dict[str, Any] = {
         "chat_id": chat_id,
         "text": text,
     }
     if buttons:
         keyboard = []
         for btn in buttons:
-            keyboard.append([{"text": btn.title, "callback_data": btn.action_payload or btn.title}])
-        payload["reply_markup"] = {"inline_keyboard": keyboard}
+            label = getattr(btn, "label", None) or getattr(btn, "title", str(btn))
+            payload = getattr(btn, "payload", None) or getattr(btn, "action_payload", label)
+            btn_url = getattr(btn, "url", None)
+
+            if btn_url:
+                keyboard.append([{"text": label, "url": btn_url}])
+            else:
+                keyboard.append([{"text": label, "callback_data": payload}])
+
+        payload_data["reply_markup"] = {"inline_keyboard": keyboard}
 
     print(f"[Telegram Outbound] Sending to chat_id={chat_id} using token={token[:10]}...")
     try:
         async with httpx.AsyncClient() as client:
-            resp = await client.post(url, json=payload, timeout=10.0)
+            resp = await client.post(url, json=payload_data, timeout=10.0)
             print(f"[Telegram Outbound Result] Status: {resp.status_code}, Body: {resp.text}")
     except Exception as exc:
         print(f"[Telegram Outbound Exception] Error sending message to chat {chat_id}: {exc}")
@@ -162,7 +170,6 @@ async def handle_telegram_webhook(request: Request) -> Dict[str, Any]:
         )
     except Exception as exc:
         print(f"[Telegram Orchestrator Error] {exc}")
-        # Send emergency fallback response to user
         await _send_telegram_api_message(
             chat_id=chat_id,
             text="🌸 Извините, произошел временный сбой. Напишите нам еще раз!",
